@@ -6,7 +6,8 @@ These notes let a fresh Claude session (or anyone else) continue work on this ap
 - A graffiti-styled ear-training web app for a high school recording class.
 - Student app: https://drkeyzzz.github.io/critical-listening-lab/
 - Teacher dashboard: https://drkeyzzz.github.io/critical-listening-lab/teacher/
-- Hosting: GitHub Pages from the `main` branch of `DrKeyzzz/drkeyzzz.github.io`, served from the repo root.
+- Hosting: GitHub Pages from the `main` branch of **`DrKeyzzz/critical-listening-lab`** (this repo), served from the repo root.
+- **This repo is the new home (moved 2026-10-15).** The lab used to live in the `critical-listening-lab/` folder of `DrKeyzzz/DrKeyzzz.github.io`. Make all changes here, not in that old folder.
 - Related pages:
   - The hub page `/index.html` (Music Theory Games) has a graffiti banner at the bottom linking to the lab.
   - The lab links back to the hub with a "Music Theory Games" button at the top.
@@ -14,10 +15,10 @@ These notes let a fresh Claude session (or anyone else) continue work on this ap
 ## Files
 | Path | What it is |
 |---|---|
-| `critical-listening-lab/index.html` | The whole student app in one file (inline CSS and JS in an IIFE, no build step needed). |
-| `critical-listening-lab/teacher/index.html` | The teacher dashboard, also a single file. Add `?preview` to the URL to see the UI without signing in. |
-| `critical-listening-lab/firestore.rules` | The full Firestore rules. They are **not** deployed from here: the teacher pastes them into the Firebase Console (Firestore > Rules) after every change. |
-| `critical-listening-lab/audio/` | Bundled music clips used as game sources. |
+| `index.html` | The whole student app in one file (inline CSS and JS in an IIFE, no build step needed). |
+| `teacher/index.html` | The teacher dashboard, also a single file. Add `?preview` to the URL to see the UI without signing in. |
+| `firestore.rules` | The full Firestore rules. They are **not** deployed from here: the teacher pastes them into the Firebase Console (Firestore > Rules) after every change. |
+| `audio/` | Bundled music clips used as game sources. |
 
 Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped it into `index.html`, but the wrapper only adds `<!doctype>`, `<head>` and the meta tags, so editing `index.html` itself is equivalent.
 
@@ -38,6 +39,8 @@ Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped
 
 ## Student app features
 - **Sign in:** first name, last initial and class code. There is also "I'm not in a class" (solo) and guest mode.
+- **Teacher dashboard button:** sits at the top right of the sign-in screen (`#teachBtn2`), and next to Switch student in the top bar on the home screen (`#teachBtn`).
+- **Syncing:** `syncUp()` sends progress to `listening_progress`. If `P.owner` is missing, it looks up the class owner again first. Before this fix (2026-10-15), a student who signed in while the class list was unreachable never synced, so they never showed up on the teacher dashboard.
 - **Daily minutes goal:** progress syncs to Firestore for the teacher.
 - **Games:** EQ/frequency, gain, compression, space/reverb, panning and more. The Analyze views show EQ, gain, compression and space.
 - **From your teacher:** cards showing the assignment and tests, a test lobby and test mode (`body.testing` hides extra UI), with results saved.
@@ -63,7 +66,7 @@ Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped
 - A "← Back to the Lab" link sits in the header.
 
 ## Testing locally
-- Serve the repo root with `python3 -m http.server 8766`, then open `http://localhost:8766/critical-listening-lab/`.
+- Serve the repo root with `python3 -m http.server 8766`, then open `http://localhost:8766/`.
 - To test with Playwright, stub `https://www.gstatic.com/firebasejs/**` with fake Firebase modules. The modules must export:
   - `initializeApp`, `getFirestore`, `doc`, `collection`;
   - `where`, `orderBy`, `limit`, `query`;
@@ -72,4 +75,5 @@ Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped
 
 ## Open items
 - Confirm the teacher has pasted the current `firestore.rules` into Firebase. The leaderboard (`listening_scores`) and `rounds_by` depend on it.
+- (Fixed 2026-10-15) Students who signed in while the class list was unreachable never synced; `syncUp()` now looks up the class owner again.
 - (Fixed) The Hard / Vel / Soft labels beside the bass velocity lane now sit one per click band.
