@@ -44,6 +44,11 @@ Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped
 - **Daily minutes goal:** progress syncs to Firestore for the teacher.
 - **Games:** EQ/frequency, gain, compression, space/reverb, panning and more. The Analyze views show EQ, gain, compression and space.
 - **From your teacher:** cards showing the assignment and tests, a test lobby and test mode (`body.testing` hides extra UI), with results saved.
+- **Learn screen** (`#vLearn`, added 2026-10-15 after students said they didn't know what each game wanted): the first time a student opens a game (not in a test), a Learn card comes up first with three steps:
+  1. **The idea**: a live picture (frequency graph, level meters, waveform, reverb tail, stereo position or drum grid), a short lesson and "Words to know".
+  2. **Hear it**: Play plus labeled examples (e.g. "HPF 1 kHz: phone call"). They play the current source through the game's own chain builders (`filterChain`, `eqChain`, ...) into `master`. Filter Expert and Peak Finder have Sweep examples.
+  3. **How to play**: the existing HOWTO demo, shown inside the card via `showHowto(id, container)`.
+  - The text lives in `LEARN` (next to `HOWTO`). Seen games are stored in localStorage `clt-learn`. "What is this?" in the play view reopens it ("Back to the game"). The how-to box no longer pops up on its own in games; Beat Maker still uses it the old way.
 - **Leaderboard:** a button in the top bar. It can be sorted by game, scoped to class or world, and is fed by `postScore`.
 - **Feedback:** a "Send feedback" modal at the bottom of the home view.
 - **Beat Maker (free play):**

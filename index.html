@@ -471,6 +471,42 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
 .fb-panel textarea{font:inherit;width:100%;min-height:110px;resize:vertical;color:var(--fg);background:var(--screen);border:1px solid var(--line);border-radius:8px;padding:10px}
 .fb-panel .rowsb{font-size:.85rem;color:var(--muted)}
 .fb-panel .acts{display:flex;gap:10px;justify-content:flex-end}
+
+/* Learn screen: the lesson, examples to hear, and how to play, shown before a game the first time */
+#vLearn{--sk:var(--accent)}
+.ln-card{display:grid;gap:18px;border-top:6px solid var(--sk)!important;padding:20px}
+.ln-head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between}
+.ln-head .label{color:var(--sk)}
+.ln-job{font-size:1.15rem;font-weight:600;margin:8px 0 0;max-width:46ch}
+.ln-tabs{display:flex;gap:6px;border-bottom:1px solid var(--line)}
+.ln-tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:8px 12px;cursor:pointer;color:var(--muted);font-weight:600}
+.ln-tabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--sk)}
+.ln-tabs b{font-family:var(--mono);margin-right:6px;color:var(--sk)}
+.ln-pane{display:grid;gap:16px}
+.ln-viz{background:var(--screen);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+.ln-viz svg{display:block;width:100%;height:auto}
+.ln-cap{margin:8px 2px 0;font-size:.88rem;color:var(--muted)}
+.ln-idea{display:grid;gap:10px;margin:0;padding:0;list-style:none;font-size:16px}
+.ln-idea li{padding-left:18px;position:relative;max-width:68ch}
+.ln-idea li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:8px;border-radius:2px;background:var(--sk)}
+.ln-words{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.ln-word{background:var(--panel-2);border-radius:8px;padding:10px 12px;font-size:.92rem}
+.ln-word b{display:block;font-family:var(--mono);color:var(--sk)}
+.ln-hear-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.ln-exs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ln-ex{text-align:left;border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:10px 12px;cursor:pointer;display:grid;gap:2px}
+.ln-ex b{font-size:.95rem} .ln-ex span{font-size:.8rem;color:var(--muted)}
+.ln-ex[aria-pressed=true]{border-color:var(--sk);box-shadow:inset 0 0 0 1px var(--sk)}
+.ln-listen{min-height:1.6em;font-weight:600;margin:0;font-size:16px}
+.ln-listen em{font-style:normal;color:var(--sk)}
+.ln-foot{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:16px}
+#vLearn .howto{box-shadow:none!important;border:0!important;padding:0;background:none}
+#vLearn .howto>.rowsb{display:none}
+#vLearn .axis{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+#vLearn .zone{font-family:var(--display);font-size:12px;fill:var(--muted);letter-spacing:.06em}
+#vLearn .anchor{font-size:11px;fill:#77757f}
+#vLearn .big-read{font-family:var(--mono);font-size:15px;fill:var(--fg)}
+@media (max-width:560px){.ln-tabs button{padding:8px 6px;font-size:.85rem}.ln-job{font-size:1.05rem}}
 </style>
 </head>
 <body>
@@ -593,7 +629,7 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
         <button class="btn" id="quit">Quit to gym</button>
       </div>
       <div class="panel">
-        <div class="rowsb" style="margin-bottom:8px;gap:10px"><div class="label" id="question"></div><button class="btn small" id="howShow">Show me how</button></div>
+        <div class="rowsb" style="margin-bottom:8px;gap:10px"><div class="label" id="question"></div><button class="btn small" id="howShow">What is this?</button></div>
         <div id="answerArea"></div>
         <p class="feedback" id="feedback" aria-live="polite"></p>
         <div class="rowsb"><span></span><button class="btn primary" id="next" hidden>Next round</button></div>
@@ -602,6 +638,40 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
     <div class="panel">
       <div class="rowsb" style="margin-bottom:8px"><span class="label" id="anLabel">Analyzer</span><span class="status">Opens after you answer</span></div>
       <div class="analyzer" id="anBox"><canvas id="spec"></canvas><div class="cover" id="cover">Locked until you answer. Trust your ears.</div></div>
+    </div>
+  </section>
+
+  <!-- LEARN: shown the first time a game opens, and from "What is this?" -->
+  <section id="vLearn" class="view" hidden>
+    <div class="panel ln-card">
+      <div class="ln-head">
+        <div><span class="label" id="lnSkill"></span><h2 id="lnName"></h2><p class="ln-job" id="lnJob"></p></div>
+        <button class="btn primary" id="lnGo" type="button">Start game</button>
+      </div>
+      <div class="ln-tabs" role="tablist" id="lnTabs">
+        <button role="tab" type="button" data-s="0"><b>1</b>The idea</button>
+        <button role="tab" type="button" data-s="1"><b>2</b>Hear it</button>
+        <button role="tab" type="button" data-s="2"><b>3</b>How to play</button>
+      </div>
+      <div class="ln-pane" id="lnP0">
+        <div class="ln-viz" id="lnVizIdea"></div>
+        <ul class="ln-idea" id="lnIdea"></ul>
+        <div><div class="label" style="margin-bottom:8px">Words to know</div><div class="ln-words" id="lnWords"></div></div>
+      </div>
+      <div class="ln-pane" id="lnP1" hidden>
+        <div class="ln-hear-top"><button class="btn primary big" id="lnPlay" type="button">▶ Play</button><p class="note" id="lnTip" style="margin:0"></p></div>
+        <div class="ln-viz" id="lnVizHear"></div>
+        <p class="ln-listen" id="lnListen" aria-live="polite"></p>
+        <div class="ln-exs" id="lnExs"></div>
+      </div>
+      <div class="ln-pane" id="lnP2" hidden>
+        <p class="note" style="margin:0">Every game works the same way: <b>A</b> is the original, <b>B</b> is the same music with one change. Flip between them and name the change.</p>
+        <div id="lnHow"></div>
+      </div>
+      <div class="ln-foot">
+        <button class="btn" id="lnBack" type="button">← Back</button>
+        <button class="btn primary big" id="lnNext" type="button">Next →</button>
+      </div>
     </div>
   </section>
 
@@ -1592,7 +1662,7 @@ function todaysWorkout() {
 }
 
 /* ================= Views ================= */
-function show(v) { if (typeof showHowto === 'function' && !(v === 'vFree' && howId === 'maker')) showHowto(null); if (v !== 'vFree' && typeof bmStop === 'function') bmStop(); document.body.classList.toggle('testing', !!(v === 'vTest' || (v === 'vPlay' && S && S.test))); ['vLogin','vHome','vPlay','vResults','vFree','vTest','vBoard'].forEach(id => $(id).hidden = id !== v); window.scrollTo(0, 0); }
+function show(v) { if (typeof showHowto === 'function' && !(v === 'vFree' && howId === 'maker')) showHowto(null); if (v !== 'vFree' && typeof bmStop === 'function') bmStop(); document.body.classList.toggle('testing', !!(v === 'vTest' || (v === 'vPlay' && S && S.test))); if (v !== 'vLearn' && LN) LN.stop(); ['vLogin','vHome','vPlay','vResults','vFree','vTest','vBoard','vLearn'].forEach(id => $(id).hidden = id !== v); window.scrollTo(0, 0); }
 const svgIcon = (name) => `<svg viewBox="0 0 64 32" aria-hidden="true"><path d="${ICONS[name]}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const pips = (l, n = 5) => `<span class="pips">${Array.from({ length:n }, (_, k) => k + 1).map(i => `<i class="${i<=l?'on':''}"></i>`).join('')}</span>`;
 
@@ -1638,6 +1708,7 @@ function startSession(gid, rounds, workout, test) {
   const grid = g.id === 'beat'; $('btnA').querySelector('span').textContent = grid ? 'Target beat' : 'Original'; $('btnB').querySelector('span').textContent = grid ? 'Your beat' : 'Processed';
   if (playing) stop();
   show('vPlay'); newRound();
+  if (!test && LN.isNew(gid)) LN.open(gid, true);   // first time in this game: teach it first
 }
 function newRound() {
   if (R && R._untune) R._untune();
@@ -1647,7 +1718,7 @@ function newRound() {
   $('feedback').textContent = R.ui === 'grid' ? 'Press Play to hear the target beat. Click the grid to build yours, press B to hear it, then Check.' : S.i === 0 ? 'Press Play, flip between A and B, then answer.' : 'New round. Flip A and B, then answer.';
   $('question').textContent = `Level ${S.level}: ${R.q || S.g.levels[S.level - 1]}`;
   $('next').hidden = true; renderAnswer(); updateCover(); wireChain(); setSide('A');
-  if (S.test) showHowto(null); else if (S.i === 0 || howId) autoHowto(S.g.id, S.level);
+  showHowto(null);   // the how-to now lives in the Learn screen
   if (playing && R.ui === 'grid') { stopSeq(); startSeq(); } else if (playing && !srcNode) start();
 }
 function renderAnswer() {
@@ -1700,7 +1771,7 @@ function renderAnswer() {
   R._strip = { strip, toX };
 }
 // "How to play" demos: a looping animation of the four steps for each game.
-// Shows on its own at levels 1-2 until the student hides it; "Show me how" brings it back.
+// Games show it in step 3 of the Learn screen; Beat Maker shows it on its own until hidden.
 const PEAK_DEMO = `<div class="demo" aria-hidden="true">
   <div class="d-top"><span class="d-btn d-play">Play</span><span class="d-btn d-a">A</span><span class="d-btn d-b">B</span><span class="d-key"><b>⇧</b> Shift</span></div>
   <div class="d-strip"><i class="d-heat"></i><span class="d-read">Click to place your guess</span><i class="d-mk"></i><i class="d-cur"></i>
@@ -1751,10 +1822,10 @@ const HOWTO = {
 const howSeen = (() => { try { return new Set(JSON.parse(localStorage.getItem('clt-how') || '[]')); } catch (e) { return new Set(); } })();
 let howRaf = 0, howId = null;
 function autoHowto(id, level) { showHowto(level <= 2 && !howSeen.has(id) ? id : null); }
-function showHowto(id) {
+function showHowto(id, into) {   // into: a container to show it in (the Learn screen)
   const box = $('howto'); cancelAnimationFrame(howRaf); howId = id; box.hidden = !id; if (!id) return;
   const H = HOWTO[id], view = id === 'maker' ? $('vFree') : $('vPlay');
-  view.insertBefore(box, view.children[1]);
+  if (into) into.appendChild(box); else view.insertBefore(box, view.children[1]);
   $('howTitle').textContent = 'How to play ' + (id === 'maker' ? 'Beat Maker' : G(id).name);
   $('howSteps').innerHTML = H.steps.map(s => `<li>${s}</li>`).join('');
   $('howNote').innerHTML = H.note || ''; $('howNote').hidden = !H.note;
@@ -1770,8 +1841,344 @@ function showHowto(id) {
   howRaf = requestAnimationFrame(loop);
 }
 $('howHide').onclick = () => { if (howId) { howSeen.add(howId); try { localStorage.setItem('clt-how', JSON.stringify([...howSeen])); } catch (e) {} } showHowto(null); };
-$('howShow').onclick = () => S && showHowto(S.g.id);
+$('howShow').onclick = () => S && LN.open(S.g.id, false);
 $('bmHow').onclick = () => showHowto('maker');
+
+/* ================= Learn screen ================= */
+// Before a game the first time (and from "What is this?"): 1 the idea (a picture and a short lesson),
+// 2 hear it (labeled examples on the current source, played through the game's own effect chains), 3 how to play (the HOWTO demo).
+const LEARN = {
+  filter:{ name:'Filter Expert', skill:'Frequency', color:'--freq', viz:'freq',
+    job:'B has a filter on it. Is it a high-pass or a low-pass, and where does it start cutting?',
+    idea:[
+      '<b>Frequency</b> is how low or high a sound is, measured in <b>Hertz (Hz)</b>. Every song is a mix of lows, mids and highs, all at once.',
+      '<b>Lows</b> (20 to 250 Hz) are the kick and bass you feel. <b>Mids</b> (250 Hz to 4 kHz) are voices, guitar and piano. <b>Highs</b> (4 to 20 kHz) are cymbals and the "s" sounds in singing.',
+      'A <b>filter</b> is like a bouncer at a door: it lets some frequencies through and blocks the rest.',
+      'A <b>high-pass filter (HPF)</b> lets the highs pass and blocks the lows. It sounds <b>thin and small</b>, like a phone call. Engineers use one on almost every vocal to clean out rumble.',
+      'A <b>low-pass filter (LPF)</b> lets the lows pass and blocks the highs. It sounds <b>dull and muffled</b>, like a party heard through the wall.'],
+    words:[['Hz','Hertz: vibrations per second. Low number = low sound.'],['kHz','Kilohertz: 1 kHz = 1,000 Hz.'],['Cutoff','The frequency where the filter starts cutting.'],['HPF / LPF','High-pass / low-pass. The name says what gets through.']],
+    ideaFx:{ t:'hp', f:400 },
+    ex:[
+      { l:'Original', h:'Nothing changed', fx:{ t:'none' } },
+      { l:'HPF 300 Hz', h:'Bass gets lighter', fx:{ t:'hp', f:300 }, say:'High-pass at 300 Hz: the <em>bass and kick get weaker</em>. Everything else stays.' },
+      { l:'HPF 1 kHz', h:'Phone call', fx:{ t:'hp', f:1000 }, say:'High-pass at 1 kHz: <em>thin and tiny</em>, like it is coming through a phone.' },
+      { l:'LPF 3 kHz', h:'A bit dull', fx:{ t:'lp', f:3000 }, say:'Low-pass at 3 kHz: the <em>sparkle is gone</em>. Cymbals sound far away.' },
+      { l:'LPF 800 Hz', h:'Through the wall', fx:{ t:'lp', f:800 }, say:'Low-pass at 800 Hz: <em>muffled</em>, like the party next door.' },
+      { l:'Sweep HPF ↑', h:'Watch and listen', fx:{ t:'hp', f:60, sweep:[40, 4000] }, say:'The high-pass cutoff is <em>moving up</em>. Hear more and more of the bottom disappear.' },
+      { l:'Sweep LPF ↓', h:'Watch and listen', fx:{ t:'lp', f:16000, sweep:[16000, 300] }, say:'The low-pass cutoff is <em>moving down</em>. Hear the top get darker and darker.' }], },
+
+  peak:{ name:'Peak Finder', skill:'Frequency', color:'--freq', viz:'freq',
+    job:'B has one narrow boost hiding in it. Find the frequency it is at.',
+    idea:[
+      'An <b>EQ</b> (equalizer) turns up or down <b>one range of frequencies</b>. Think of it as a volume knob for just part of the sound.',
+      'A <b>bell EQ</b> is named after its shape on the graph: it rises to a peak at one frequency and slopes back down on both sides, like a bell or a hill.',
+      'A bell has three settings: <b>frequency</b> (where the peak is), <b>gain</b> (how tall, in dB) and <b>width</b> (how wide; engineers call it <b>Q</b>).',
+      'A narrow boost makes that one spot ring out. Boost the lows and it gets <b>boomy</b>. Around 1 kHz it gets <b>honky</b>, like a kazoo. Up high it gets <b>harsh</b> or <b>hissy</b>.',
+      'Pro trick: <b>boost and sweep</b>. Engineers boost a narrow bell and slide it around to find an ugly frequency, then cut it. Holding <b>Shift</b> in this game does exactly that.'],
+    words:[['Bell','An EQ shape that bumps up (or down) around one frequency.'],['Gain','How much it is turned up or down, in dB.'],['Q','How narrow the bell is. Higher Q = narrower.']],
+    ideaFx:{ t:'bell', f:1000, g:9, q:2 },
+    ex:[
+      { l:'Original', h:'Nothing changed', fx:{ t:'none' } },
+      { l:'Boost 150 Hz', h:'Boomy', fx:{ t:'bell', f:150, g:9, q:2 }, say:'+9 dB at 150 Hz: <em>boomy</em>, the bass swells up.' },
+      { l:'Boost 1 kHz', h:'Honky', fx:{ t:'bell', f:1000, g:9, q:2 }, say:'+9 dB at 1 kHz: <em>honky and nasal</em>, like a kazoo.' },
+      { l:'Boost 4 kHz', h:'Harsh', fx:{ t:'bell', f:4000, g:9, q:2 }, say:'+9 dB at 4 kHz: <em>harsh and edgy</em>. It pokes your ears.' },
+      { l:'Boost 10 kHz', h:'Hissy', fx:{ t:'bell', f:10000, g:9, q:2 }, say:'+9 dB at 10 kHz: <em>hissy and sizzly</em> cymbals.' },
+      { l:'Sweep the bell', h:'Boost and sweep', fx:{ t:'bell', f:80, g:9, q:2, sweep:[60, 12000] }, say:'This is <em>boost and sweep</em>. Hear the boost slide from low to high.' }], },
+
+  eq:{ name:'Boost or Cut', skill:'Frequency', color:'--freq', viz:'freq',
+    job:'One range of frequencies on B was turned up or turned down. Which one, and where?',
+    idea:[
+      'This uses the same <b>bell EQ</b> as Peak Finder, but this time it can go <b>up or down</b>.',
+      'A <b>boost</b> is a hill: that range <b>sticks out</b> and gets louder.',
+      'A <b>cut</b> is a valley: that range <b>drops out</b> and leaves a hole. Cuts are harder to hear because you are listening for something that is missing.',
+      'Where it happens changes the feel. <b>Lows</b> (around 100 Hz) are warmth and boom. <b>Mids</b> (around 1 kHz) are body and presence. <b>Highs</b> (around 6 to 8 kHz) are air and sparkle.',
+      'Tip: if nothing jumps out at you, it is probably a <b>cut</b>. Listen for what got quieter.'],
+    words:[['Boost','Turned up. A hill on the graph.'],['Cut','Turned down. A valley on the graph.'],['Band','One range of frequencies, like "the lows".']],
+    ideaFx:{ t:'bell', f:1000, g:-6, q:1.4 },
+    ex:[
+      { l:'Original', h:'Nothing changed', fx:{ t:'none' } },
+      { l:'Boost lows', h:'Warmer, boomier', fx:{ t:'bell', f:120, g:6, q:1.4 }, say:'+6 dB in the lows: <em>warmer and boomier</em>.' },
+      { l:'Cut lows', h:'Thinner', fx:{ t:'bell', f:120, g:-6, q:1.4 }, say:'−6 dB in the lows: <em>thinner</em>, the bottom is weaker.' },
+      { l:'Boost mids', h:'Pushier, honkier', fx:{ t:'bell', f:1000, g:6, q:1.4 }, say:'+6 dB in the mids: <em>pushier</em>, more in your face.' },
+      { l:'Cut mids', h:'Hollow, scooped', fx:{ t:'bell', f:1000, g:-6, q:1.4 }, say:'−6 dB in the mids: <em>hollow</em>, like the middle got scooped out.' },
+      { l:'Boost highs', h:'Brighter', fx:{ t:'bell', f:7000, g:6, q:1.4 }, say:'+6 dB in the highs: <em>brighter</em>, more sizzle.' },
+      { l:'Cut highs', h:'Darker', fx:{ t:'bell', f:7000, g:-6, q:1.4 }, say:'−6 dB in the highs: <em>darker</em>, a little dull.' }], },
+
+  gain:{ name:'Gain Master', skill:'Level', color:'--level', viz:'gain',
+    job:'B is the exact same music at a different volume. Louder or quieter, and by how much?',
+    idea:[
+      '<b>Gain</b> means level, or volume. It is measured in <b>decibels (dB)</b>.',
+      'dB describe a change. <b>+</b> means louder, <b>−</b> means quieter. <b>1 dB</b> is about the smallest change most people can notice. <b>3 dB</b> is easy to hear. <b>6 dB</b> is obvious.',
+      'The trap: our ears hear more bass and more treble when music is louder. So <b>louder almost always sounds "better"</b>, even when nothing else changed.',
+      'That is why engineers <b>level-match</b>: they set A and B to the same volume before deciding which one is better. In this game, don\'t pick the one you like. Pick the one that is louder.'],
+    words:[['dB','Decibel: the unit for level changes.'],['Gain','How much the level is turned up or down.'],['Level-match','Make two things equally loud before comparing them.']],
+    ideaFx:{ t:'gain', db:3 },
+    ex:[
+      { l:'Original', h:'Nothing changed', fx:{ t:'gain', db:0 } },
+      { l:'+1 dB', h:'Tiny', fx:{ t:'gain', db:1 }, say:'+1 dB: <em>tiny</em>. Flip a few times. Can you hear it?' },
+      { l:'+3 dB', h:'Easy to hear', fx:{ t:'gain', db:3 }, say:'+3 dB: <em>easy to hear</em>. Notice how it also sounds "better".' },
+      { l:'+6 dB', h:'Obvious', fx:{ t:'gain', db:6 }, say:'+6 dB: <em>obvious</em>. The signal is about twice as strong.' },
+      { l:'−3 dB', h:'Quieter', fx:{ t:'gain', db:-3 }, say:'−3 dB: <em>quieter</em>. Does it seem a little duller too? That is the trap.' }], },
+
+  comp:{ name:'Compressor Ears', skill:'Dynamics', color:'--dyn', viz:'comp',
+    job:'Is B compressed? If it is, how hard?',
+    idea:[
+      'A <b>compressor</b> is an automatic volume knob. When the sound gets louder than a set level, it turns it down.',
+      '<b>Threshold</b>: the level where it starts working. Anything quieter than that is left alone.',
+      '<b>Ratio</b>: how hard it turns down. At <b>4:1</b>, for every 4 dB the sound goes over the threshold, only 1 dB comes out. 2:1 is gentle. 10:1 and up is heavy.',
+      '<b>Makeup gain</b> turns everything back up afterward, so the quiet parts end up louder than before.',
+      'What you hear: drum hits lose their <b>snap</b>, quiet sounds come up, and everything sounds <b>denser and more even</b>. Heavy compression can <b>pump</b>: the whole mix ducks on every kick.'],
+    words:[['Dynamics','The difference between loud and quiet parts.'],['Threshold','The level where the compressor starts.'],['Ratio','How hard it squashes. 4:1, 10:1...'],['Makeup gain','Turning it back up after squashing.']],
+    ideaFx:{ t:'comp', thr:-30, r:6 },
+    ex:[
+      { l:'Original', h:'Not compressed', fx:{ t:'none' } },
+      { l:'Light 3:1', h:'A little smoother', fx:{ t:'comp', thr:-24, r:3 }, say:'Light, 3:1: <em>a little smoother</em>. The hits are slightly softer.' },
+      { l:'Heavy 12:1', h:'Squashed', fx:{ t:'comp', thr:-38, r:12 }, say:'Heavy, 12:1: <em>squashed flat</em>. Hear the snap disappear and the mix pump.' }], },
+
+  pan:{ name:'Balance Test', skill:'Space', color:'--space', viz:'pan',
+    job:'B was moved to the left or the right. Where is it?',
+    idea:[
+      '<b>Stereo</b> means two channels: one for your <b>left</b> ear or speaker, one for your <b>right</b>.',
+      'The <b>pan</b> knob decides how much goes to each side. <b>Center</b> is equal on both sides, so it seems to come from straight ahead. <b>Hard left</b> means only the left side.',
+      'Mixers pan to give each instrument its own spot. Kick, bass and lead vocal usually sit in the center. Guitars, keys and backing vocals get spread out.',
+      '<b>Wear headphones</b> (or sit right between two speakers). On one phone speaker you can\'t hear panning at all.'],
+    words:[['Stereo','Two channels: left and right.'],['Pan','Where a sound sits between left and right.'],['Hard left / right','All the way to one side.']],
+    ideaFx:{ t:'pan', p:-.5 },
+    ex:[
+      { l:'Center', h:'Straight ahead', fx:{ t:'pan', p:0 }, say:'Center: <em>equal in both ears</em>.' },
+      { l:'Halfway left', h:'Leaning left', fx:{ t:'pan', p:-.5 }, say:'Halfway left: <em>leaning toward your left ear</em>.' },
+      { l:'Hard left', h:'Only the left', fx:{ t:'pan', p:-1 }, say:'Hard left: <em>only your left ear</em>.' },
+      { l:'Halfway right', h:'Leaning right', fx:{ t:'pan', p:.5 }, say:'Halfway right: <em>leaning toward your right ear</em>.' },
+      { l:'Hard right', h:'Only the right', fx:{ t:'pan', p:1 }, say:'Hard right: <em>only your right ear</em>.' }], },
+
+  space:{ name:'Reverb Space', skill:'Space', color:'--space', viz:'verb',
+    job:'Is there reverb on B? If so, how big is the space?',
+    idea:[
+      'When a sound happens in a room, it bounces off the walls, floor and ceiling. Thousands of echoes blur together into a <b>tail</b>. That tail is <b>reverb</b>.',
+      '<b>Dry</b> means no reverb: close, right in your face. <b>Wet</b> means lots of reverb: it sounds farther away.',
+      '<b>Decay time</b> is how long the tail takes to fade out. A small room is under 1 second. A concert hall is about 2 seconds. A cathedral or gym can be 3 seconds or more.',
+      '<b>Mix</b> (or <b>send</b>) is how much reverb is blended in with the dry sound.',
+      'Listen <b>in the gaps right after a drum hit</b>. That is where the tail lives.'],
+    words:[['Reverb','The sound of a space: echoes blurred into a tail.'],['Dry / wet','No reverb / lots of reverb.'],['Decay','How long the tail lasts, in seconds.']],
+    ideaFx:{ t:'verb', d:1.8, mix:.45 },
+    ex:[
+      { l:'Dry', h:'No space', fx:{ t:'none' }, say:'Dry: <em>no tail</em>. Each hit stops short.' },
+      { l:'Room 0.6 s', h:'Small room', fx:{ t:'verb', d:.6, mix:.45 }, say:'Small room, 0.6 s: <em>a short, tight tail</em>.' },
+      { l:'Hall 1.8 s', h:'Concert hall', fx:{ t:'verb', d:1.8, mix:.45 }, say:'Hall, 1.8 s: <em>a longer tail</em> that fills the gaps.' },
+      { l:'Cathedral 3 s', h:'Huge space', fx:{ t:'verb', d:3, mix:.45 }, say:'Cathedral, 3 s: <em>a huge wash</em>. Everything blurs together.' },
+      { l:'Lots of reverb', h:'Far away', fx:{ t:'verb', d:1.6, mix:.8 }, say:'A big mix: the band sounds <em>far away</em>, at the back of the room.' }], },
+
+  beat:{ name:'Beat Recreate', skill:'Rhythm', color:'--rhythm', viz:'beat',
+    job:'Listen to a drum beat, then rebuild it on the grid.',
+    idea:[
+      'The grid is <b>one bar</b> of music: <b>4 beats</b>. Each beat is split into 4 squares, so there are <b>16 squares</b>. Each square is a <b>16th note</b>.',
+      'Count it out loud: <b>"1 e + a, 2 e + a, 3 e + a, 4 e + a."</b> The numbers are the beats.',
+      '<b>Kick</b> is the low thump, often on 1 and 3. <b>Snare</b> is the crack, often on 2 and 4 (the <b>backbeat</b>). <b>Hi-hat</b> is the tick that keeps time, often on every "+".',
+      'Build <b>one drum at a time</b>: kick first, then snare, then hi-hat.'],
+    words:[['Bar','A group of beats. Here, 4 beats.'],['16th note','One square. Four of them make a beat.'],['Backbeat','Snare on beats 2 and 4.']],
+    ex:[
+      { l:'Kick only', h:'The low thump', fx:{ t:'beat', rows:['kick'] }, say:'Kick on <em>1 and 3</em>. Count along.' },
+      { l:'Add snare', h:'The backbeat', fx:{ t:'beat', rows:['kick','snare'] }, say:'Snare on <em>2 and 4</em>: the backbeat.' },
+      { l:'Add hi-hat', h:'Keeps time', fx:{ t:'beat', rows:['kick','snare','hat'] }, say:'Hi-hat on <em>every 8th note</em>: 1 + 2 + 3 + 4 +.' }], },
+};
+const LBEAT = { kick:[0,8], snare:[4,12], hat:[0,2,4,6,8,10,12,14] };
+var LN = (() => {
+const W = 640, H = 220, PL = 34, PR = 10, PT = 26, PB = 30;   // picture size (viewBox units)
+const fx2x = f => PL + (Math.log10(f) - Math.log10(20)) / 3 * (W - PL - PR);
+const db2y = (db, lo = -30, hi = 15) => PT + (hi - Math.max(lo, Math.min(hi, db))) / (hi - lo) * (H - PT - PB);
+let oac;
+function response(fx) {
+  oac ||= new OfflineAudioContext(1, 1, 44100);
+  const N = 240, fr = new Float32Array(N); for (let i = 0; i < N; i++) fr[i] = 20 * Math.pow(1000, i / (N - 1));
+  const mag = new Float32Array(N), ph = new Float32Array(N), f = oac.createBiquadFilter();
+  if (fx.t === 'hp' || fx.t === 'lp') { f.type = fx.t === 'hp' ? 'highpass' : 'lowpass'; f.Q.value = .7071; }
+  else if (fx.t === 'bell') { f.type = 'peaking'; f.gain.value = fx.g; f.Q.value = fx.q; }
+  else return [...fr].map(x => [x, 0]);
+  f.frequency.value = fx.f; f.getFrequencyResponse(fr, mag, ph);
+  const k = fx.t === 'bell' ? 1 : 2; return [...fr].map((x, i) => [x, k * 20 * Math.log10(Math.max(1e-6, mag[i]))]);
+}
+function freqSVG(fx, readout) {
+  const pts = response(fx), line = pts.map(([f, d], i) => `${i ? 'L' : 'M'}${fx2x(f).toFixed(1)} ${db2y(d).toFixed(1)}`).join(' ');
+  const y0 = db2y(0), fill = `${line} L${fx2x(20000)} ${y0} L${PL} ${y0} Z`;
+  const grid = [50,100,200,500,1000,2000,5000,10000].map(f => `<line x1="${fx2x(f)}" x2="${fx2x(f)}" y1="${PT}" y2="${H-PB}" stroke="#25252c"/><text class="axis" x="${fx2x(f)}" y="${H-PB+16}" text-anchor="middle">${fmtHz(f).replace(' ','')}</text>`).join('');
+  const zones = [['LOWS',20,250,'kick · bass'],['MIDS',250,4000,'voice · guitar · piano'],['HIGHS',4000,20000,'cymbals · "s"']].map(([n,a,b,an], i) =>
+    `${i ? `<line x1="${fx2x(a)}" x2="${fx2x(a)}" y1="${PT-18}" y2="${H-PB}" stroke="#3b3b45" stroke-dasharray="3 4"/>` : ''}<text class="zone" x="${(fx2x(a)+fx2x(b))/2}" y="${PT-6}" text-anchor="middle">${n}</text><text class="anchor" x="${(fx2x(a)+fx2x(b))/2}" y="${H-PB-8}" text-anchor="middle">${an}</text>`).join('');
+  const none = fx.t === 'none';
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Frequency graph">
+    ${grid}${zones}
+    <line x1="${PL}" x2="${W-PR}" y1="${y0}" y2="${y0}" stroke="#55535f"/>
+    <text class="axis" x="${PL-6}" y="${y0+4}" text-anchor="end">0</text><text class="axis" x="${PL-6}" y="${db2y(12)+4}" text-anchor="end">+12</text><text class="axis" x="${PL-6}" y="${db2y(-24)+4}" text-anchor="end">−24</text>
+    ${none ? '' : `<path d="${fill}" fill="var(--sk)" opacity=".18"/>`}
+    <path d="${line}" fill="none" stroke="${none ? '#77757f' : 'var(--sk)'}" stroke-width="3" stroke-linejoin="round"/>
+    ${readout ? `<text class="big-read" x="${W-PR-6}" y="${PT+18}" text-anchor="end">${readout}</text>` : ''}
+  </svg>`;
+}
+function freqLabel(fx) {
+  if (fx.t === 'hp') return `High-pass · cutoff ${fmtHz(fx.f)}`;
+  if (fx.t === 'lp') return `Low-pass · cutoff ${fmtHz(fx.f)}`;
+  if (fx.t === 'bell') return `Bell · ${fx.g > 0 ? '+' : '−'}${Math.abs(fx.g)} dB at ${fmtHz(fx.f)}`;
+  return 'Flat: nothing changed';
+}
+function gainSVG(db) {
+  const lo = -12, hi = 9, y = v => 20 + (hi - v) / (hi - lo) * 170, bar = (x, v, lab, col) =>
+    `<rect x="${x}" y="${y(v)}" width="80" height="${190 - y(v)}" rx="4" fill="${col}"/><text class="big-read" x="${x+40}" y="${y(v)-8}" text-anchor="middle">${lab}</text>`;
+  return `<svg viewBox="0 0 ${W} 220" role="img" aria-label="Level meters">
+    ${[-12,-6,0,6].map(v => `<line x1="160" x2="480" y1="${y(v)}" y2="${y(v)}" stroke="#25252c"/><text class="axis" x="150" y="${y(v)+4}" text-anchor="end">${v > 0 ? '+' : ''}${v} dB</text>`).join('')}
+    ${bar(200, 0, 'A', '#55535f')}${bar(360, db, `B ${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db)} dB`, 'var(--sk)')}
+    <text class="anchor" data-cap x="320" y="212" text-anchor="middle">1 dB tiny · 3 dB easy · 6 dB obvious</text></svg>`;
+}
+function envSVG(fx) {   // drum-hit envelopes before (grey) and after (color), with the threshold line
+  const T = 4, hits = [[0,1],[.5,.35],[1,.8],[1.5,.35],[2,1],[2.5,.4],[3,.75],[3.5,.35]];
+  const N = 400, xs = i => 20 + i / N * (W - 40), amp = [];
+  for (let i = 0; i <= N; i++) { const t = i / N * T; let a = .03; hits.forEach(([h, p]) => { if (t >= h) a = Math.max(a, p * Math.exp(-(t - h) * 7)); }); amp.push(a); }
+  const mid = 110, sc = 90, comp = fx.t === 'comp';
+  const thrD = comp ? fx.thr * .4 : 0, mk = comp ? -(thrD + (0 - thrD) / fx.r) * .35 : 0;   // picture scale, not the real dB
+  const out = amp.map(a => { if (!comp) return a; const db = 20 * Math.log10(a), o = db > thrD ? thrD + (db - thrD) / fx.r : db;
+    return Math.min(1.05, Math.pow(10, (o + mk) / 20)); });
+  const shape = arr => arr.map((a, i) => `${i ? 'L' : 'M'}${xs(i).toFixed(1)} ${(mid - a * sc).toFixed(1)}`).join(' ') + arr.map((a, i) => ` L${xs(N - i).toFixed(1)} ${(mid + arr[N - i] * sc).toFixed(1)}`).join('') + ' Z';
+  const thrY = comp ? mid - Math.pow(10, thrD / 20) * sc : 0;
+  return `<svg viewBox="0 0 ${W} 220" role="img" aria-label="Waveform before and after">
+    <path d="${shape(amp)}" fill="#55535f" opacity=".6"/>
+    ${comp ? `<path d="${shape(out)}" fill="var(--sk)" opacity=".75"/><line x1="20" x2="${W-20}" y1="${thrY}" y2="${thrY}" stroke="var(--bad)" stroke-dasharray="6 5"/><text class="axis" x="${W-20}" y="${thrY-6}" text-anchor="end" fill="var(--bad)">threshold</text>` : ''}
+    <text class="anchor" data-cap x="20" y="214">${comp ? `grey = before · green = after (${fx.r}:1). The loud hits got pushed down, the quiet parts came up.` : 'The original: tall spiky hits (loud) with quiet gaps in between.'}</text></svg>`;
+}
+function verbSVG(fx) {
+  const X = t => 30 + t / 4 * (W - 60), base = 170, hitsAt = [0.2, 2.2];
+  let body = hitsAt.map(h => `<rect x="${X(h)-3}" y="${base-130}" width="6" height="130" fill="#f5f2ea"/>`).join('');
+  if (fx.t === 'verb') { hitsAt.forEach(h => { let d = `M${X(h)} ${base}`; for (let t = 0; t <= 2; t += .02) { const a = fx.mix * 120 * Math.exp(-6.9 * t / fx.d); d += ` L${X(h + t).toFixed(1)} ${(base - a).toFixed(1)}`; } d += ` L${X(h + 2)} ${base} Z`; body += `<path d="${d}" fill="var(--sk)" opacity=".55"/>`; });
+    body += `<text class="big-read" x="${X(.2)+12}" y="34">decay ${fx.d} s</text>`; }
+  return `<svg viewBox="0 0 ${W} 220" role="img" aria-label="Reverb tail">
+    <line x1="30" x2="${W-30}" y1="${base}" y2="${base}" stroke="#55535f"/>${body}
+    ${[0,1,2,3,4].map(s => `<text class="axis" x="${X(s)}" y="${base+18}" text-anchor="middle">${s} s</text>`).join('')}
+    <text class="anchor" data-cap x="30" y="212">${fx.t === 'verb' ? 'White bars = drum hits. Purple = the reverb tail ringing after each hit.' : 'Dry: just the hits, silence in between.'}</text></svg>`;
+}
+function panSVG(p) {
+  const cx = 320, x = cx + p * 200;
+  return `<svg viewBox="0 0 ${W} 220" role="img" aria-label="Stereo position">
+    <rect x="70" y="30" width="44" height="60" rx="6" fill="#2a2a31" stroke="#55535f"/><text class="zone" x="92" y="112" text-anchor="middle">LEFT</text>
+    <rect x="526" y="30" width="44" height="60" rx="6" fill="#2a2a31" stroke="#55535f"/><text class="zone" x="548" y="112" text-anchor="middle">RIGHT</text>
+    <line x1="120" x2="520" y1="60" y2="60" stroke="#3b3b45" stroke-dasharray="3 5"/>
+    <circle cx="${x}" cy="60" r="14" fill="var(--sk)"/><text class="big-read" x="${x}" y="36" text-anchor="middle">${Math.abs(p) < .05 ? 'center' : `${Math.round(Math.abs(p)*100)}% ${p < 0 ? 'left' : 'right'}`}</text>
+    <circle cx="${cx}" cy="170" r="26" fill="#2a2a31" stroke="#77757f"/><ellipse cx="${cx-27}" cy="170" rx="6" ry="10" fill="#77757f"/><ellipse cx="${cx+27}" cy="170" rx="6" ry="10" fill="#77757f"/>
+    <path d="M${cx-8} 146 L${cx} 136 L${cx+8} 146" fill="none" stroke="#77757f" stroke-width="2"/><text class="anchor" x="${cx}" y="212" text-anchor="middle">you (wearing headphones)</text></svg>`;
+}
+function beatSVG(rows, playStep = -1) {
+  const names = ['hat','snare','kick'], cw = 34, x0 = 70, y0 = 30, rh = 44;
+  let s = '';
+  names.forEach((k, r) => { s += `<text class="zone" x="${x0-10}" y="${y0 + r*rh + 26}" text-anchor="end">${k === 'hat' ? 'HAT' : k.toUpperCase()}</text>`;
+    for (let i = 0; i < 16; i++) { const on = rows && rows.includes(k) && LBEAT[k].includes(i);
+      s += `<rect x="${x0 + i*cw + (Math.floor(i/4))*4}" y="${y0 + r*rh}" width="${cw-4}" height="${rh-6}" rx="4" fill="${on ? 'var(--sk)' : i % 4 ? '#1f1f25' : '#2a2a31'}" ${i === playStep ? 'stroke="#fff" stroke-width="2"' : ''}/>`; } });
+  const count = ['1','e','+','a'];
+  for (let i = 0; i < 16; i++) s += `<text class="axis" x="${x0 + i*cw + Math.floor(i/4)*4 + 15}" y="${y0 + 3*rh + 14}" text-anchor="middle" ${i % 4 ? '' : 'fill="#f5f2ea"'}>${i % 4 ? count[i % 4] : i/4 + 1}</text>`;
+  return `<svg viewBox="0 0 ${W} 200" role="img" aria-label="16-step drum grid">${s}</svg>`;
+}
+function picture(g, fx, readout) {
+  switch (g.viz) {
+    case 'freq': return freqSVG(fx, readout);
+    case 'gain': return gainSVG(fx.t === 'gain' ? fx.db : 0);
+    case 'comp': return envSVG(fx);
+    case 'verb': return verbSVG(fx);
+    case 'pan': return panSVG(fx.t === 'pan' ? fx.p : 0);
+    case 'beat': return beatSVG(fx.rows || ['kick','snare','hat']);
+  }
+}
+
+function setViz(el, html) {
+  el.innerHTML = html; const t = el.querySelector('[data-cap]');
+  if (t) { const p = document.createElement('p'); p.className = 'ln-cap'; p.textContent = t.textContent; t.remove(); el.appendChild(p); }
+}
+const SKVAR = { Frequency:'--freq', Level:'--level', Dynamics:'--dyn', Space:'--space', Rhythm:'--rhythm' };
+const seen = (() => { try { return new Set(JSON.parse(localStorage.getItem('clt-learn') || '[]')); } catch (e) { return new Set(); } })();
+let gid = null, step = 0, cur = null, on = false, src = null, live = null, raf = 0, seq = null;
+function build(fx) {
+  const mk = { hp:() => filterChain('highpass', fx.f), lp:() => filterChain('lowpass', fx.f), bell:() => eqChain(fx.f, fx.g, fx.q), gain:() => gainChain(fx.db),
+    pan:() => panChain(fx.p), comp:() => compChain(fx.thr, fx.r), verb:() => reverbChain(fx.d, fx.mix) }[fx.t] || passChain;
+  const c = mk()(ctx), out = ctx.createGain(); c.output.connect(out); out.connect(master);
+  return { inp:c.input, out, ctl: ['hp','lp','bell'].includes(fx.t) ? [...new Set([c.input.frequency, c.output.frequency])] : null };
+}
+function swap(fx) {
+  const old = live, t = ctx.currentTime;
+  live = build(fx); live.out.gain.value = 0; live.out.gain.setTargetAtTime(1, t, .01);
+  if (src) src.connect(live.inp);
+  if (old) { old.out.gain.setTargetAtTime(0, t, .01); setTimeout(() => { try { old.out.disconnect(); if (src) src.disconnect(old.inp); } catch (e) {} }, 120); }
+}
+async function startSrc() {
+  let got;
+  try { got = await getBuffer($('src').value); } catch (e) { got = await getBuffer('combo'); }
+  if (!got || !on) return;
+  const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
+  stopSrc(); src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+  if (loopEnd) { src.loopStart = loopStart; src.loopEnd = loopEnd; }
+  if (live) src.connect(live.inp); src.start(0, loopStart);
+}
+function stopSrc() { if (src) { try { src.stop(); } catch (e) {} src.disconnect(); src = null; } }
+function stopSeqL() { clearInterval(seq); seq = null; }
+function startBeat() {
+  stopSeqL(); let nextT = ctx.currentTime + .05, n = 0;
+  seq = setInterval(() => { while (nextT < ctx.currentTime + .12) { const st = n % 16, rows = cur.fx.rows;
+    rows.forEach(k => LBEAT[k].includes(st) && hit(k, nextT));
+    setTimeout(() => { if (cur && cur.fx.t === 'beat' && on) $('lnVizHear').innerHTML = beatSVG(rows, st); }, Math.max(0, (nextT - ctx.currentTime) * 1000));
+    nextT += STEP; n++; } }, 25);
+}
+function apply() {
+  cancelAnimationFrame(raf); const e = cur, g = LEARN[gid];
+  if (e.fx.t === 'beat') { stopSrc(); if (live) { live.out.disconnect(); live = null; } startBeat(); return; }
+  stopSeqL(); swap(e.fx); if (!src) startSrc();
+  if (e.fx.sweep) { const [a, b] = e.fx.sweep, t0 = performance.now(), dur = 9000;
+    const tick = now => { const k = ((now - t0) % dur) / dur, f = a * Math.pow(b / a, k);
+      if (live && live.ctl) live.ctl.forEach(p => p.setTargetAtTime(f, ctx.currentTime, .02));
+      const fx = { ...e.fx, f }; setViz($('lnVizHear'), picture(g, fx, freqLabel(fx))); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick); }
+}
+function stopAudio() {
+  cancelAnimationFrame(raf); stopSrc(); stopSeqL(); if (live) { try { live.out.disconnect(); } catch (e) {} live = null; }
+  on = false; $('lnPlay').textContent = '▶ Play';
+}
+function togglePlay() {
+  if (on) return stopAudio();
+  if (playing) stop();
+  ensureCtx(); on = true; $('lnPlay').textContent = '■ Stop'; apply();
+}
+function choose(i, quiet) {
+  const g = LEARN[gid], e = g.ex[i]; cur = e;
+  $('lnExs').querySelectorAll('.ln-ex').forEach(b => b.setAttribute('aria-pressed', +b.dataset.i === i));
+  $('lnListen').innerHTML = e.say || 'The original, with nothing changed. Click an example to hear the difference.';
+  cancelAnimationFrame(raf); setViz($('lnVizHear'), picture(g, e.fx, g.viz === 'freq' ? freqLabel(e.fx) : ''));
+  if (quiet) return;
+  if (!on) togglePlay(); else apply();
+}
+function setStep(s) {
+  step = s; [0, 1, 2].forEach(i => $('lnP' + i).hidden = i !== s);
+  $('lnTabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', +b.dataset.s === s));
+  $('lnBack').style.visibility = s ? 'visible' : 'hidden';
+  $('lnNext').textContent = s === 2 ? $('lnGo').textContent : 'Next →';
+  if (s !== 1 && on) stopAudio();
+  if (s === 2) showHowto(gid, $('lnHow')); else showHowto(null);
+}
+function open(id, first) {
+  const g = LEARN[id]; if (!g) return;
+  if (playing) stop();
+  gid = id; seen.add(id); try { localStorage.setItem('clt-learn', JSON.stringify([...seen])); } catch (e) {}
+  show('vLearn');
+  $('vLearn').style.setProperty('--sk', `var(${SKVAR[g.skill]})`);
+  $('lnSkill').textContent = g.skill; $('lnName').textContent = g.name; $('lnJob').textContent = g.job;
+  $('lnGo').textContent = first ? 'Start game' : 'Back to the game';
+  $('lnIdea').innerHTML = g.idea.map(x => `<li>${x}</li>`).join('');
+  $('lnWords').innerHTML = g.words.map(([w, d]) => `<div class="ln-word"><b>${w}</b>${d}</div>`).join('');
+  setViz($('lnVizIdea'), picture(g, g.ideaFx || { t:'beat', rows:['kick','snare','hat'] }, g.viz === 'freq' ? freqLabel(g.ideaFx) : ''));
+  $('lnTip').innerHTML = id === 'beat' ? 'Press Play and count along. Click each step to add a drum.' : id === 'pan' ? 'Put headphones on, press Play, then click each spot.'
+    : 'Press Play, then click each example. Flip back to <b>' + g.ex[0].l + '</b> to compare.';
+  $('lnExs').innerHTML = g.ex.map((e, i) => `<button class="ln-ex" type="button" data-i="${i}" aria-pressed="false"><b>${e.l}</b><span>${e.h}</span></button>`).join('');
+  $('lnExs').querySelectorAll('.ln-ex').forEach(b => b.onclick = () => choose(+b.dataset.i));
+  choose(0, true); setStep(0);
+}
+const go = () => { stopAudio(); showHowto(null); show('vPlay'); };
+$('lnTabs').querySelectorAll('button').forEach(b => b.onclick = () => setStep(+b.dataset.s));
+$('lnBack').onclick = () => setStep(Math.max(0, step - 1));
+$('lnNext').onclick = () => step === 2 ? go() : setStep(step + 1);
+$('lnGo').onclick = go; $('lnPlay').onclick = togglePlay;
+return { open, stop: () => { if (on) stopAudio(); }, isNew: id => !!LEARN[id] && !seen.has(id) };
+})();
 
 function peakFrame(box, steps) {
   const q = c => box.querySelector(c);
