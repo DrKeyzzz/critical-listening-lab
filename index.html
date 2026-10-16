@@ -423,6 +423,12 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
 .gdemo .d-yay{position:absolute;right:14px;bottom:14px}
 .gdemo>.d-cur{top:0;left:0;transition:left .45s ease,top .45s ease;z-index:2;filter:drop-shadow(0 2px 2px #000)}
 .btn.small{padding:6px 12px;font-size:.75rem}
+/* Song strip (play view): the whole song, where it starts, and an optional loop */
+.song{display:grid;gap:8px;padding:12px 16px}
+.song-head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between}
+.song-head .row{display:flex;gap:8px}
+.song canvas{display:block;width:100%;height:64px;border-radius:6px;background:var(--screen);cursor:crosshair;touch-action:none}
+.song .btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 /* live Shift feedback on the real strip */
 .strip.tuning{border-color:var(--accent)!important;box-shadow:0 0 16px rgba(255,225,77,.45)}
 .strip .shiftbadge{position:absolute;top:6px;right:8px;font:400 12px var(--display);padding:2px 8px;border-radius:6px;background:var(--accent);color:var(--ink);pointer-events:none;display:none}
@@ -613,6 +619,12 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
         </div>
       </div>
       <div class="progress" id="prog"></div>
+    </div>
+    <div class="panel song" id="song" hidden>
+      <div class="song-head"><span class="label" id="songName">Song</span><span class="status" id="songInfo"></span>
+        <div class="row"><button class="btn small" id="songLoop" type="button" aria-pressed="false">Loop a part</button><button class="btn small" id="songAll" type="button">Whole song</button></div></div>
+      <canvas id="songWave" aria-label="The whole song. Click to choose where it starts. Drag across to loop part of it."></canvas>
+      <p class="hint" style="margin:0">Click the song to choose where it starts. Drag across it to loop just that part.</p>
     </div>
     <div class="panel howto" id="howto" hidden>
       <div class="rowsb"><span class="label" id="howTitle">How to play</span><button class="btn" id="howHide">Got it, hide this</button></div>
@@ -943,20 +955,90 @@ async function start() {
 async function startInner() {
   if (R && R.ui === 'grid') { stopSrc(); startSeq(); playing = true; $('playLabel').textContent = 'Stop'; return; }
   stopSeq();
-  let got;
-  try { got = await getBuffer(S && S.g.id === 'space' ? 'clap' : $('src').value); }
-  catch (e) { showStatus("The class track didn't load, so the jazz loop is playing instead."); $('src').value = 'combo'; got = await getBuffer('combo'); }
+  let got, kind = S && S.g.id === 'space' ? 'clap' : $('src').value;
+  try { got = await getBuffer(kind); }
+  catch (e) { showStatus("The class track didn't load, so the jazz loop is playing instead."); $('src').value = kind = 'combo'; got = await getBuffer('combo'); renderSong(); }
   if (!got) return;
-  const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
+  const sp = spanFor(kind, got);
   stopSrc();
-  srcNode = ctx.createBufferSource(); srcNode.buffer = buf; srcNode.loop = true;
-  if (loopEnd) { srcNode.loopStart = loopStart; srcNode.loopEnd = loopEnd; }
-  srcNode.connect(dryG); srcNode.connect(insertIn); srcNode.connect(sweepIn); srcNode.start(0, loopStart);
-  playing = true; $('playLabel').textContent = 'Stop';
+  srcNode = ctx.createBufferSource(); srcNode.buffer = sp.buf; srcNode.loop = true; srcNode.loopStart = sp.ls; srcNode.loopEnd = sp.le;
+  srcNode.connect(dryG); srcNode.connect(insertIn); srcNode.connect(sweepIn); srcNode.start(0, sp.off);
+  playSpan = sp; playT0 = ctx.currentTime;
+  playing = true; $('playLabel').textContent = 'Stop'; drawSong();
 }
+/* ================= Song strip: see the whole song, pick where it starts, loop a part ================= */
+// REG[source] = { start, end, loop } in seconds, kept for this visit. Loop off plays from the start point to the
+// end of the song and then back to the start point; loop on repeats start to end.
+const REG = {}, PEAKS = new WeakMap();
+let playSpan = null, playT0 = 0, songBuf = null, songRaf = 0;
+function spanFor(kind, got) {
+  const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
+  if (kind === 'clap') return { buf, ls: 0, le: buf.duration, off: 0 };
+  const dflt = [loopStart, loopEnd || buf.duration];
+  const r = REG[kind] ||= { start: dflt[0], end: dflt[1], loop: false, dflt, dur: buf.duration };
+  const le = r.loop ? r.end : buf.duration;
+  return { buf, ls: r.start, le: Math.max(r.start + .25, le), off: r.start };
+}
+const fmtT = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function peaksOf(buf) {
+  if (PEAKS.has(buf)) return PEAKS.get(buf);
+  const n = 900, a = buf.getChannelData(0), b = buf.numberOfChannels > 1 ? buf.getChannelData(1) : a, per = Math.max(1, Math.floor(a.length / n)), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let m = 0; const o = i * per; for (let j = 0; j < per; j += 4) { const v = Math.abs(a[o + j] || 0) + Math.abs(b[o + j] || 0); if (v > m) m = v; } out[i] = m / 2; }
+  let top = 0; for (const v of out) top = Math.max(top, v); if (top) for (let i = 0; i < n; i++) out[i] /= top;
+  PEAKS.set(buf, out); return out;
+}
+async function renderSong() {
+  const box = $('song'), kind = $('src').value;
+  const want = S && !$('vPlay').hidden && S.g.id !== 'space' && R && R.ui !== 'grid' && kind !== 'pink';
+  if (!want) { box.hidden = true; return; }
+  let got; try { got = await getBuffer(kind); } catch (e) { got = null; }
+  if (!got || kind !== $('src').value) { box.hidden = true; return; }
+  spanFor(kind, got); songBuf = got instanceof AudioBuffer ? got : got.buf;
+  $('songName').textContent = ($('src').selectedOptions[0] || {}).textContent || 'Song';
+  box.hidden = false; drawSong();
+}
+function drawSong() {
+  const cv = $('songWave'), r = REG[$('src').value]; if ($('song').hidden || !songBuf || !r) return;
+  const W = cv.width = Math.round(cv.clientWidth * devicePixelRatio), H = cv.height = Math.round(cv.clientHeight * devicePixelRatio), g = cv.getContext('2d');
+  const dur = songBuf.duration, X = t => t / dur * W, pk = peaksOf(songBuf), end = r.loop ? r.end : dur;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,225,77,.12)'; g.fillRect(X(r.start), 0, X(end) - X(r.start), H);
+  for (let i = 0; i < pk.length; i++) { const x = i / pk.length * W, t = i / pk.length * dur, h = Math.max(1, pk[i] * (H - 6));
+    g.fillStyle = t >= r.start && t <= end ? '#f5f2ea' : '#55535f'; g.fillRect(x, (H - h) / 2, Math.max(1, W / pk.length - .5), h); }
+  g.fillStyle = '#ffe14d'; g.fillRect(X(r.start) - devicePixelRatio, 0, 2 * devicePixelRatio, H);
+  if (r.loop) g.fillRect(X(r.end) - devicePixelRatio, 0, 2 * devicePixelRatio, H);
+  if (playing && srcNode && playSpan && playSpan.buf === songBuf) {
+    let p = playSpan.off + (ctx.currentTime - playT0); if (p >= playSpan.le) p = playSpan.ls + (p - playSpan.le) % (playSpan.le - playSpan.ls);
+    g.fillStyle = '#7dff6a'; g.fillRect(X(p) - devicePixelRatio, 0, 2 * devicePixelRatio, H);
+  }
+  $('songInfo').textContent = r.loop ? `Looping ${fmtT(r.start)} to ${fmtT(r.end)}` : r.start > .5 ? `Starts at ${fmtT(r.start)} of ${fmtT(dur)}` : `${fmtT(dur)} long`;
+  $('songLoop').setAttribute('aria-pressed', r.loop); $('songLoop').textContent = r.loop ? 'Loop on' : 'Loop a part';
+  cancelAnimationFrame(songRaf); if (playing) songRaf = requestAnimationFrame(drawSong);
+}
+(() => {
+  const cv = $('songWave'); let grab = null, t0 = 0, dragged = false;
+  const tOf = e => { const b = cv.getBoundingClientRect(); return b.width ? Math.max(0, Math.min(1, (e.clientX - b.left) / b.width)) * songBuf.duration : 0; };
+  const pxOf = t => t / songBuf.duration * cv.getBoundingClientRect().width;
+  const restart = () => { if (playing && !(R && R.ui === 'grid')) start(); else drawSong(); };
+  cv.onpointerdown = e => { const r = REG[$('src').value]; if (!r || !songBuf) return; cv.setPointerCapture(e.pointerId);
+    const t = tOf(e), near = v => Math.abs(pxOf(t) - pxOf(v)) < 10;
+    grab = near(r.start) ? 'start' : r.loop && near(r.end) ? 'end' : 'new'; t0 = t; dragged = false; };
+  cv.onpointermove = e => { if (!grab) return; const r = REG[$('src').value], t = tOf(e);
+    if (grab === 'start') { r.start = Math.min(t, (r.loop ? r.end : songBuf.duration) - .25); dragged = true; }
+    else if (grab === 'end') { r.end = Math.max(t, r.start + .25); dragged = true; }
+    else if (Math.abs(pxOf(t) - pxOf(t0)) > 6) { r.start = Math.min(t, t0); r.end = Math.max(t, t0, r.start + .25); r.loop = true; dragged = true; }
+    drawSong(); };
+  cv.onpointerup = e => { if (!grab) return; const r = REG[$('src').value], t = tOf(e);
+    if (grab === 'new' && !dragged) { r.start = t; if (r.loop && r.end - t < .5) r.loop = false; }
+    grab = null; restart(); };
+  $('songLoop').onclick = () => { const r = REG[$('src').value]; if (!r) return;
+    r.loop = !r.loop; if (r.loop && r.end - r.start < 1) r.end = Math.min(songBuf.duration, r.start + 8); restart(); };
+  $('songAll').onclick = () => { const r = REG[$('src').value]; if (!r) return; r.start = r.dflt[0]; r.end = r.dflt[1]; r.loop = false; restart(); };
+  addEventListener('resize', () => drawSong());
+})();
 function showStatus(m) { const st = $('srcStatus'); st.hidden = false; st.textContent = m; }
 function stopSrc() { if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); srcNode = null; } }
-function stop() { stopSrc(); stopSeq(); playing = false; $('playLabel').textContent = 'Play'; }
+function stop() { stopSrc(); stopSeq(); playing = false; $('playLabel').textContent = 'Play'; drawSong(); }
 function tune(f) {   // f = frequency to audition, or null to return to A/B
   if (f == null && !ctx) return;
   ensureCtx();
@@ -1732,7 +1814,7 @@ function newRound() {
   $('prog').innerHTML = Array.from({ length:S.rounds }, (_, k) => `<i class="${k < S.results.length ? (S.results[k] ? 'ok' : 'bad') : k === S.i ? 'cur' : ''}"></i>`).join('');
   $('feedback').textContent = R.ui === 'grid' ? 'Press Play to hear the target beat. Click the grid to build yours, press B to hear it, then Check.' : S.i === 0 ? 'Press Play, flip between A and B, then answer.' : 'New round. Flip A and B, then answer.';
   $('question').textContent = `Level ${S.level}: ${R.q || S.g.levels[S.level - 1]}`;
-  $('next').hidden = true; renderAnswer(); updateCover(); wireChain(); setSide('A');
+  $('next').hidden = true; renderAnswer(); updateCover(); wireChain(); setSide('A'); renderSong();
   showHowto(null);   // the how-to now lives in the Learn screen
   if (playing && R.ui === 'grid') { stopSeq(); startSeq(); } else if (playing && !srcNode) start();
 }
@@ -2142,13 +2224,12 @@ function swap(fx) {
   if (old) { old.out.gain.setTargetAtTime(0, t, .01); setTimeout(() => { try { old.out.disconnect(); if (src) src.disconnect(old.inp); } catch (e) {} }, 120); }
 }
 async function startSrc() {
-  let got;
-  try { got = await getBuffer(gid === 'space' ? 'clap' : $('src').value); } catch (e) { got = await getBuffer('combo'); }
+  let got, kind = gid === 'space' ? 'clap' : $('src').value;
+  try { got = await getBuffer(kind); } catch (e) { kind = 'combo'; got = await getBuffer('combo'); }
   if (!got || !on) return;
-  const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
-  stopSrc(); src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
-  if (loopEnd) { src.loopStart = loopStart; src.loopEnd = loopEnd; }
-  if (live) src.connect(live.inp); src.start(0, loopStart);
+  const sp = spanFor(kind, got);   // same start point and loop the student picked on the song strip
+  stopSrc(); src = ctx.createBufferSource(); src.buffer = sp.buf; src.loop = true; src.loopStart = sp.ls; src.loopEnd = sp.le;
+  if (live) src.connect(live.inp); src.start(0, sp.off);
 }
 function stopSrc() { if (src) { try { src.stop(); } catch (e) {} src.disconnect(); src = null; } }
 function stopSeqL() { clearInterval(seq); seq = null; }
@@ -2618,15 +2699,15 @@ $('rHome').onclick = () => { renderHome(); refreshClass(true); };
 $('rAgain').onclick = () => S.test ? openTest(S.test.id) : startSession(S.g.id, S.rounds, S.workout);
 $('rNext').onclick = () => { const w = S.workout; startSession(w.games[w.idx + 1], 5, { games:w.games, idx:w.idx + 1 }); };
 $('vol').oninput = e => { if (master) master.gain.setTargetAtTime(+e.target.value, ctx.currentTime, 0.02); };
-$('src').onchange = () => { if (playing) start(); };
+$('src').onchange = () => { renderSong(); if (playing) start(); };
 $('file').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   const st = $('srcStatus'); st.hidden = false; st.textContent = 'Decoding ' + f.name + '…';
   try {
-    ensureCtx(); fileBuffer = await ctx.decodeAudioData(await f.arrayBuffer());
+    ensureCtx(); fileBuffer = await ctx.decodeAudioData(await f.arrayBuffer()); delete REG.file;
     const opt = $('src').querySelector('option[value=file]'); opt.disabled = false; opt.textContent = 'Your file: ' + f.name; $('src').value = 'file';
-    st.textContent = `Loaded ${f.name} (${fileBuffer.duration.toFixed(1)} s). It loops while you listen.`;
-    if (playing) start();
+    st.textContent = `Loaded ${f.name} (${fileBuffer.duration.toFixed(1)} s). Click the song in a game to choose where it starts, or drag to loop a part.`;
+    renderSong(); if (playing) start();
   } catch (err) { st.textContent = "That file couldn't be decoded. Try a WAV or MP3."; }
 };
 document.addEventListener('keyup', e => { if (e.key === 'Shift' && R && R._untune) R._untune(); });
