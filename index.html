@@ -856,6 +856,17 @@ async function renderLoop(parts) {
   });
   return oc.startRendering();
 }
+// Reverb Space uses one clap with silence after it, so the whole reverb tail can be heard (3.6 s loop).
+async function makeClap() {
+  const oc = new OfflineAudioContext(2, Math.ceil(SR * 3.6), SR);
+  const nb = oc.createBuffer(1, SR, SR), nd = nb.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  const burst = (t, dur, q, gain) => { const s = oc.createBufferSource(), f = oc.createBiquadFilter(), g = oc.createGain(); s.buffer = nb;
+    f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = q; g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    s.connect(f).connect(g).connect(oc.destination); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02); };
+  [0, 0.011, 0.023].forEach(d => burst(0.05 + d, 0.02, 1.5, 2.8)); burst(0.08, 0.18, 1.2, 1.8);
+  return oc.startRendering();
+}
 function makePink() {
   const len = SR * 4, b = new AudioBuffer({ numberOfChannels: 2, length: len, sampleRate: SR });
   for (let c = 0; c < 2; c++) {
@@ -890,7 +901,7 @@ async function getTrack(kind) {
 async function getBuffer(kind) {
   if (TRACKS[kind]) return getTrack(kind);
   if (kind === 'file') return fileBuffer;
-  if (!buffers[kind]) buffers[kind] = kind === 'pink' ? makePink()
+  if (!buffers[kind]) buffers[kind] = kind === 'pink' ? makePink() : kind === 'clap' ? await makeClap()
     : await renderLoop({ combo:{drums:1,bass:1,keys:1}, drums:{drums:1}, keys:{bass:1,keys:1} }[kind]);
   return buffers[kind];
 }
@@ -931,7 +942,7 @@ async function startInner() {
   if (R && R.ui === 'grid') { stopSrc(); startSeq(); playing = true; $('playLabel').textContent = 'Stop'; return; }
   stopSeq();
   let got;
-  try { got = await getBuffer($('src').value); }
+  try { got = await getBuffer(S && S.g.id === 'space' ? 'clap' : $('src').value); }
   catch (e) { showStatus("The class track didn't load, so the jazz loop is playing instead."); $('src').value = 'combo'; got = await getBuffer('combo'); }
   if (!got) return;
   const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
@@ -1585,7 +1596,7 @@ const GAMES = [
       return { ui:'pan', target:p, tol, build: panChain(p), stereo:p, reveal:`Panned ${panLabel(p)}.` }; } },
   { id:'space', name:'Reverb Space', skill:'Space', icon:'space',
     tagline:'Dry or wet, small room or big hall.',
-    blurb:'B may have reverb added. Listen to the tails after each hit and how far away it feels.',
+    blurb:'You hear a single clap. B may have reverb added. Listen to the tail after the clap and how far away it feels.',
     levels:['Reverb or dry? (light reverb)', 'Room or hall?', 'Short, medium or long decay?', 'Which decay time? 4 choices', 'How much reverb? 4 choices'],
     round(L) {
       if (L === 1) { const yes = Math.random() < .6;
@@ -1691,6 +1702,7 @@ function renderHome() {
       <div class="meta"><span class="tag sk-Rhythm">Free play</span><span>${P.freeBeat ? P.freeBeat.rows.length + ' rows saved' : 'No score, just make beats'}</span></div></button>`);
   $('games').querySelectorAll('.card[data-g]').forEach(c => c.onclick = () => startSession(c.dataset.g, 10, null));
   $('freeCard').onclick = openFree;
+  $('src').disabled = false; $('src').title = '';
   renderTeacherBox(); refreshClass();
   show('vHome');
 }
@@ -1707,6 +1719,7 @@ function startSession(gid, rounds, workout, test) {
   $('gBlurb').textContent = g.blurb; $('question').textContent = '';
   const grid = g.id === 'beat'; $('btnA').querySelector('span').textContent = grid ? 'Target beat' : 'Original'; $('btnB').querySelector('span').textContent = grid ? 'Your beat' : 'Processed';
   if (playing) stop();
+  $('src').disabled = gid === 'space'; $('src').title = gid === 'space' ? 'Reverb Space always uses a single clap, so you can hear the whole tail.' : '';
   show('vPlay'); newRound();
   if (!test && LN.isNew(gid)) LN.open(gid, true);   // first time in this game: teach it first
 }
@@ -1805,7 +1818,7 @@ const HOWTO = {
     '<b>Click the side.</b> Later levels have you click the exact spot on a strip.',
     '<b>Check the analyzer.</b> The heat map shows where the sound sits, and the knob shows how B was panned.'] },
   space:{ ans:['Reverb','Dry'], pick:0, steps:[FLIP,
-    '<b>Listen right after each hit.</b> Reverb leaves a tail that rings out, like a gym. Dry stops short.',
+    '<b>Listen right after the clap.</b> Reverb leaves a tail that rings out, like a gym. Dry stops short.',
     '<b>Click the answer.</b> Later levels ask how long the tail is.',
     '<b>Read the feedback</b> to see the decay time and how much reverb was on B.'] },
   beat:{ ans:['Check my beat'], pick:0, grid:true, steps:[
@@ -1958,15 +1971,15 @@ const LEARN = {
       '<b>Dry</b> means no reverb: close, right in your face. <b>Wet</b> means lots of reverb: it sounds farther away.',
       '<b>Decay time</b> is how long the tail takes to fade out. A small room is under 1 second. A concert hall is about 2 seconds. A cathedral or gym can be 3 seconds or more.',
       '<b>Mix</b> (or <b>send</b>) is how much reverb is blended in with the dry sound.',
-      'Listen <b>in the gaps right after a drum hit</b>. That is where the tail lives.'],
+      'This game uses <b>one clap</b> with silence after it. Listen <b>right after the clap</b>: that is where the tail lives.'],
     words:[['Reverb','The sound of a space: echoes blurred into a tail.'],['Dry / wet','No reverb / lots of reverb.'],['Decay','How long the tail lasts, in seconds.']],
     ideaFx:{ t:'verb', d:1.8, mix:.45 },
     ex:[
-      { l:'Dry', h:'No space', fx:{ t:'none' }, say:'Dry: <em>no tail</em>. Each hit stops short.' },
+      { l:'Dry', h:'No space', fx:{ t:'none' }, say:'Dry: <em>no tail</em>. The clap stops short.' },
       { l:'Room 0.6 s', h:'Small room', fx:{ t:'verb', d:.6, mix:.45 }, say:'Small room, 0.6 s: <em>a short, tight tail</em>.' },
-      { l:'Hall 1.8 s', h:'Concert hall', fx:{ t:'verb', d:1.8, mix:.45 }, say:'Hall, 1.8 s: <em>a longer tail</em> that fills the gaps.' },
-      { l:'Cathedral 3 s', h:'Huge space', fx:{ t:'verb', d:3, mix:.45 }, say:'Cathedral, 3 s: <em>a huge wash</em>. Everything blurs together.' },
-      { l:'Lots of reverb', h:'Far away', fx:{ t:'verb', d:1.6, mix:.8 }, say:'A big mix: the band sounds <em>far away</em>, at the back of the room.' }], },
+      { l:'Hall 1.8 s', h:'Concert hall', fx:{ t:'verb', d:1.8, mix:.45 }, say:'Hall, 1.8 s: <em>a longer tail</em> that rings out after the clap.' },
+      { l:'Cathedral 3 s', h:'Huge space', fx:{ t:'verb', d:3, mix:.45 }, say:'Cathedral, 3 s: <em>a huge wash</em> that keeps ringing.' },
+      { l:'Lots of reverb', h:'Far away', fx:{ t:'verb', d:1.6, mix:.8 }, say:'A big mix: the clap sounds <em>far away</em>, at the back of the room.' }], },
 
   beat:{ name:'Beat Recreate', skill:'Rhythm', color:'--rhythm', viz:'beat',
     job:'Listen to a drum beat, then rebuild it on the grid.',
@@ -2043,14 +2056,14 @@ function envSVG(fx) {   // drum-hit envelopes before (grey) and after (color), w
     <text class="anchor" data-cap x="20" y="214">${comp ? `grey = before · green = after (${fx.r}:1). The loud hits got pushed down, the quiet parts came up.` : 'The original: tall spiky hits (loud) with quiet gaps in between.'}</text></svg>`;
 }
 function verbSVG(fx) {
-  const X = t => 30 + t / 4 * (W - 60), base = 170, hitsAt = [0.2, 2.2];
+  const X = t => 30 + t / 4 * (W - 60), base = 170, hitsAt = [0.2];
   let body = hitsAt.map(h => `<rect x="${X(h)-3}" y="${base-130}" width="6" height="130" fill="#f5f2ea"/>`).join('');
-  if (fx.t === 'verb') { hitsAt.forEach(h => { let d = `M${X(h)} ${base}`; for (let t = 0; t <= 2; t += .02) { const a = fx.mix * 120 * Math.exp(-6.9 * t / fx.d); d += ` L${X(h + t).toFixed(1)} ${(base - a).toFixed(1)}`; } d += ` L${X(h + 2)} ${base} Z`; body += `<path d="${d}" fill="var(--sk)" opacity=".55"/>`; });
+  if (fx.t === 'verb') { hitsAt.forEach(h => { let d = `M${X(h)} ${base}`; for (let t = 0; t <= 3.6; t += .02) { const a = fx.mix * 120 * Math.exp(-6.9 * t / fx.d); d += ` L${X(h + t).toFixed(1)} ${(base - a).toFixed(1)}`; } d += ` L${X(h + 3.6)} ${base} Z`; body += `<path d="${d}" fill="var(--sk)" opacity=".55"/>`; });
     body += `<text class="big-read" x="${X(.2)+12}" y="34">decay ${fx.d} s</text>`; }
   return `<svg viewBox="0 0 ${W} 220" role="img" aria-label="Reverb tail">
     <line x1="30" x2="${W-30}" y1="${base}" y2="${base}" stroke="#55535f"/>${body}
     ${[0,1,2,3,4].map(s => `<text class="axis" x="${X(s)}" y="${base+18}" text-anchor="middle">${s} s</text>`).join('')}
-    <text class="anchor" data-cap x="30" y="212">${fx.t === 'verb' ? 'White bars = drum hits. Purple = the reverb tail ringing after each hit.' : 'Dry: just the hits, silence in between.'}</text></svg>`;
+    <text class="anchor" data-cap x="30" y="212">${fx.t === 'verb' ? 'White bar = the clap. Purple = the reverb tail ringing after it.' : 'Dry: just the clap, then silence.'}</text></svg>`;
 }
 function panSVG(p) {
   const cx = 320, x = cx + p * 200;
@@ -2104,7 +2117,7 @@ function swap(fx) {
 }
 async function startSrc() {
   let got;
-  try { got = await getBuffer($('src').value); } catch (e) { got = await getBuffer('combo'); }
+  try { got = await getBuffer(gid === 'space' ? 'clap' : $('src').value); } catch (e) { got = await getBuffer('combo'); }
   if (!got || !on) return;
   const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
   stopSrc(); src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
