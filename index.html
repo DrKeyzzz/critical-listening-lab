@@ -2136,7 +2136,9 @@ function startBeat() {
 function apply() {
   cancelAnimationFrame(raf); const e = cur, g = LEARN[gid];
   if (e.fx.t === 'beat') { stopSrc(); if (live) { live.out.disconnect(); live = null; } startBeat(); return; }
-  stopSeqL(); swap(e.fx); if (!src) startSrc();
+  stopSeqL(); swap(e.fx);
+  if (gid === 'space') { stopSrc(); startSrc(); }   // the clap fires right away on every click
+  else if (!src) startSrc();
   if (e.fx.sweep) { const [a, b] = e.fx.sweep, t0 = performance.now(), dur = 9000;
     const tick = now => { const k = ((now - t0) % dur) / dur, f = a * Math.pow(b / a, k);
       if (live && live.ctl) live.ctl.forEach(p => p.setTargetAtTime(f, ctx.currentTime, .02));
@@ -2579,8 +2581,10 @@ $('home').onclick = () => { stop(); renderHome(); };
 $('quit').onclick = () => { stop(); renderHome(); };
 $('woStart').onclick = startWorkout;
 $('play').onclick = () => playing ? stop() : start();
-$('btnA').onclick = () => { setSide('A'); if (!playing) start(); };
-$('btnB').onclick = () => { setSide('B'); if (!playing) start(); };
+// Reverb Space restarts the clap on every A/B click, so the change is heard right away.
+const flipTo = s => { setSide(s); if (!playing || (S && S.g.id === 'space' && R.ui !== 'grid')) start(); };
+$('btnA').onclick = () => flipTo('A');
+$('btnB').onclick = () => flipTo('B');
 $('next').onclick = nextRound;
 $('rHome').onclick = () => { renderHome(); refreshClass(true); };
 $('rAgain').onclick = () => S.test ? openTest(S.test.id) : startSession(S.g.id, S.rounds, S.workout);
@@ -2604,7 +2608,7 @@ document.addEventListener('keydown', e => {
   if (k === ' ') { e.preventDefault(); playing ? stop() : start(); }
   else if (k === 'a') $('btnA').click();
   else if (k === 'b') $('btnB').click();
-  else if (k === 'x') { setSide(side === 'A' ? 'B' : 'A'); if (!playing) start(); }
+  else if (k === 'x') flipTo(side === 'A' ? 'B' : 'A');
   else if (k === 'enter') { if (answered) { e.preventDefault(); nextRound(); } else if ($('lock') && !$('lock').disabled) { e.preventDefault(); $('lock').click(); } }
   else if (/^[1-9]$/.test(k)) { const b = document.querySelectorAll('.ans')[+k - 1]; if (b) b.click(); }
 });
