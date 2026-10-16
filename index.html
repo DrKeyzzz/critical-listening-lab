@@ -34,6 +34,8 @@ button{font:inherit;color:inherit}
 h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.03em;margin:0;line-height:1.05;text-wrap:balance}
 h2{font-size:1.6rem} h3{font-size:1.25rem}
 .top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
+/* Phones: the page column may shrink below its widest child, and the header pieces wrap instead of pushing the page sideways */
+.wrap{grid-template-columns:minmax(0,1fr)} .top>*{min-width:0;max-width:100%} .source{min-width:0}
 .brand{background:none;border:0;padding:0;cursor:pointer;text-align:left}
 .brand h1{font-size:1.9rem;font-weight:700}
 .brand small{display:block;font-size:.85rem;color:var(--muted)}
@@ -160,7 +162,7 @@ kbd{font-family:var(--mono);font-size:.72rem;border:1px solid var(--line);border
 .known{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:.85rem;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;cursor:pointer}
 .chip:hover{border-color:var(--accent)}
-.who{display:flex;align-items:center;gap:10px;font-weight:600}
+.who{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-weight:600}
 .who .btn{padding:5px 10px;font-size:.82rem}
 #report{width:100%;min-height:110px;font:12px var(--mono);color:var(--fg);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:8px}
 
@@ -691,7 +693,7 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
         <button class="btn" id="bmUndo" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
         <button class="btn" id="bmClear">Clear</button>
         <button class="btn" id="bmReset">New beat</button>
-        <button class="btn" id="bmHow">How it works</button>
+        <button class="btn" id="bmHow">What is this?</button>
       </div>
       <div class="bm-save"><input id="bmName" maxlength="40" placeholder="Name your beat"><button class="btn primary" id="bmSave">Save beat</button>
         <select id="bmLoad" aria-label="My saved beats"></select><button class="btn" id="bmDelete">Delete</button><span class="status" id="bmSaved"></span></div>
@@ -1189,7 +1191,7 @@ let FB = null, bmTimer = null, bmNext = 0, bmStep = 0;
 function openFree() {
   stop(); FB = P.freeBeat ||= defaultBeat(); fitBars(); bassInit();
   $('bmTempo').value = FB.bpm; $('bmTempoOut').textContent = FB.bpm; $('bmSwing').value = FB.swing; $('bmSwingOut').textContent = FB.swing;
-  $('bmPicker').hidden = true; renderFree(); renderBass(); setBassOpen(bassOpen); renderMyBeats(); show('vFree'); autoHowto('maker', 1);
+  $('bmPicker').hidden = true; renderFree(); renderBass(); setBassOpen(bassOpen); renderMyBeats(); show('vFree'); if (LN.isNew('maker')) LN.open('maker', true);
 }
 // Beats can be 1, 2, 4 or 8 bars of sixteenth notes; each row has 16 steps per bar
 const bmLen = () => 16 * (FB.bars || 1);
@@ -1834,7 +1836,6 @@ const HOWTO = {
 };
 const howSeen = (() => { try { return new Set(JSON.parse(localStorage.getItem('clt-how') || '[]')); } catch (e) { return new Set(); } })();
 let howRaf = 0, howId = null;
-function autoHowto(id, level) { showHowto(level <= 2 && !howSeen.has(id) ? id : null); }
 function showHowto(id, into) {   // into: a container to show it in (the Learn screen)
   const box = $('howto'); cancelAnimationFrame(howRaf); howId = id; box.hidden = !id; if (!id) return;
   const H = HOWTO[id], view = id === 'maker' ? $('vFree') : $('vPlay');
@@ -1855,7 +1856,7 @@ function showHowto(id, into) {   // into: a container to show it in (the Learn s
 }
 $('howHide').onclick = () => { if (howId) { howSeen.add(howId); try { localStorage.setItem('clt-how', JSON.stringify([...howSeen])); } catch (e) {} } showHowto(null); };
 $('howShow').onclick = () => S && LN.open(S.g.id, false);
-$('bmHow').onclick = () => showHowto('maker');
+$('bmHow').onclick = () => LN.open('maker', false);
 
 /* ================= Learn screen ================= */
 // Before a game the first time (and from "What is this?"): 1 the idea (a picture and a short lesson),
@@ -1993,6 +1994,24 @@ const LEARN = {
       { l:'Kick only', h:'The low thump', fx:{ t:'beat', rows:['kick'] }, say:'Kick on <em>1 and 3</em>. Count along.' },
       { l:'Add snare', h:'The backbeat', fx:{ t:'beat', rows:['kick','snare'] }, say:'Snare on <em>2 and 4</em>: the backbeat.' },
       { l:'Add hi-hat', h:'Keeps time', fx:{ t:'beat', rows:['kick','snare','hat'] }, say:'Hi-hat on <em>every 8th note</em>: 1 + 2 + 3 + 4 +.' }], },
+  maker:{ name:'Beat Maker', skill:'Rhythm', color:'--rhythm', viz:'beat',
+    job:'Build your own beat. No score and no wrong answers, just make something you like.',
+    idea:[
+      'A <b>beat</b> is a pattern that <b>loops</b>. Each row is one sound and each square is a <b>16th note</b>, just like in Beat Recreate. Click a square to add a hit.',
+      '<b>Tempo</b> is the speed, in <b>BPM</b> (beats per minute). Hip-hop sits around 85 to 95, pop and house around 115 to 128, drum and bass around 170.',
+      '<b>Velocity</b> is how hard a hit is played. Click a square again for medium, again for hard. Real drummers never hit every note the same, so mixing soft and hard hits makes a beat feel <b>human</b>.',
+      '<b>Swing</b> pushes every other 16th note a little late, so the beat <b>bounces</b> instead of marching. A lot of hip-hop and R&B use some swing.',
+      '<b>Pan</b> places each row left or right, like in Balance Test. Keep kick, snare and bass in the center and spread hats and percussion out.',
+      'The <b>🎸 Bass</b> row opens a piano roll: pick a key and draw notes that fit with your drums.'],
+    words:[['BPM','Beats per minute: the tempo.'],['Velocity','How hard a hit is played: soft, medium or hard.'],['Swing','Every other 16th note pushed a little late.'],['Loop','A pattern that repeats.']],
+    ideaFx:{ t:'beat', rows:['kick','snare','hat'], hat16:true, accent:true },
+    ex:[
+      { l:'Basic beat', h:'96 BPM', fx:{ t:'beat', rows:['kick','snare','hat'], bpm:96 }, say:'A basic beat at <em>96 BPM</em>: kick, snare on 2 and 4, hi-hat on the 8ths.' },
+      { l:'Slow 80 BPM', h:'Laid back', fx:{ t:'beat', rows:['kick','snare','hat'], bpm:80 }, say:'The same beat at <em>80 BPM</em>: slower and more laid back.' },
+      { l:'Fast 128 BPM', h:'Dance tempo', fx:{ t:'beat', rows:['kick','snare','hat'], bpm:128 }, say:'The same beat at <em>128 BPM</em>: a dance or house tempo.' },
+      { l:'16th hats', h:'No swing', fx:{ t:'beat', rows:['kick','snare','hat'], bpm:92, hat16:true }, say:'Hi-hat on <em>every 16th note</em>, perfectly straight. It marches.' },
+      { l:'With swing', h:'Bounces', fx:{ t:'beat', rows:['kick','snare','hat'], bpm:92, hat16:true, swing:.66 }, say:'The same hats <em>with swing</em>: every other one is late, so it bounces.' },
+      { l:'Accents', h:'Soft and hard hits', fx:{ t:'beat', rows:['kick','snare','hat'], bpm:92, hat16:true, accent:true }, say:'<em>Velocity</em>: hard hats on the 8ths, soft ones in between. It sounds played, not programmed.' }] },
 };
 const LBEAT = { kick:[0,8], snare:[4,12], hat:[0,2,4,6,8,10,12,14] };
 var LN = (() => {
@@ -2075,12 +2094,19 @@ function panSVG(p) {
     <circle cx="${cx}" cy="170" r="26" fill="#2a2a31" stroke="#77757f"/><ellipse cx="${cx-27}" cy="170" rx="6" ry="10" fill="#77757f"/><ellipse cx="${cx+27}" cy="170" rx="6" ry="10" fill="#77757f"/>
     <path d="M${cx-8} 146 L${cx} 136 L${cx+8} 146" fill="none" stroke="#77757f" stroke-width="2"/><text class="anchor" x="${cx}" y="212" text-anchor="middle">you (wearing headphones)</text></svg>`;
 }
-function beatSVG(rows, playStep = -1) {
-  const names = ['hat','snare','kick'], cw = 34, x0 = 70, y0 = 30, rh = 44;
+// A beat example as { row: [16 velocities] }. hat16: hats on every 16th; accent: hard on the 8ths, soft in between.
+function patOf(fx) {
+  const p = {};
+  (fx.rows || ['kick','snare','hat']).forEach(k => { p[k] = Array(16).fill(0);
+    (k === 'hat' && fx.hat16 ? [...Array(16).keys()] : LBEAT[k]).forEach(i => { p[k][i] = k === 'hat' && fx.accent && i % 2 ? .35 : 1; }); });
+  return p;
+}
+function beatSVG(fx, playStep = -1) {
+  const names = ['hat','snare','kick'], cw = 34, x0 = 70, y0 = 30, rh = 44, pat = patOf(fx);
   let s = '';
   names.forEach((k, r) => { s += `<text class="zone" x="${x0-10}" y="${y0 + r*rh + 26}" text-anchor="end">${k === 'hat' ? 'HAT' : k.toUpperCase()}</text>`;
-    for (let i = 0; i < 16; i++) { const on = rows && rows.includes(k) && LBEAT[k].includes(i);
-      s += `<rect x="${x0 + i*cw + (Math.floor(i/4))*4}" y="${y0 + r*rh}" width="${cw-4}" height="${rh-6}" rx="4" fill="${on ? 'var(--sk)' : i % 4 ? '#1f1f25' : '#2a2a31'}" ${i === playStep ? 'stroke="#fff" stroke-width="2"' : ''}/>`; } });
+    for (let i = 0; i < 16; i++) { const v = (pat[k] || [])[i] || 0;
+      s += `<rect x="${x0 + i*cw + (Math.floor(i/4))*4}" y="${y0 + r*rh}" width="${cw-4}" height="${rh-6}" rx="4" fill="${v ? 'var(--sk)' : i % 4 ? '#1f1f25' : '#2a2a31'}" ${v && v < 1 ? 'fill-opacity=".45"' : ''} ${i === playStep ? 'stroke="#fff" stroke-width="2"' : ''}/>`; } });
   const count = ['1','e','+','a'];
   for (let i = 0; i < 16; i++) s += `<text class="axis" x="${x0 + i*cw + Math.floor(i/4)*4 + 15}" y="${y0 + 3*rh + 14}" text-anchor="middle" ${i % 4 ? '' : 'fill="#f5f2ea"'}>${i % 4 ? count[i % 4] : i/4 + 1}</text>`;
   return `<svg viewBox="0 0 ${W} 200" role="img" aria-label="16-step drum grid">${s}</svg>`;
@@ -2092,7 +2118,7 @@ function picture(g, fx, readout) {
     case 'comp': return envSVG(fx);
     case 'verb': return verbSVG(fx);
     case 'pan': return panSVG(fx.t === 'pan' ? fx.p : 0);
-    case 'beat': return beatSVG(fx.rows || ['kick','snare','hat']);
+    case 'beat': return beatSVG(fx.t === 'beat' ? fx : { rows:['kick','snare','hat'] });
   }
 }
 
@@ -2128,10 +2154,11 @@ function stopSrc() { if (src) { try { src.stop(); } catch (e) {} src.disconnect(
 function stopSeqL() { clearInterval(seq); seq = null; }
 function startBeat() {
   stopSeqL(); let nextT = ctx.currentTime + .05, n = 0;
-  seq = setInterval(() => { while (nextT < ctx.currentTime + .12) { const st = n % 16, rows = cur.fx.rows;
-    rows.forEach(k => LBEAT[k].includes(st) && hit(k, nextT));
-    setTimeout(() => { if (cur && cur.fx.t === 'beat' && on) $('lnVizHear').innerHTML = beatSVG(rows, st); }, Math.max(0, (nextT - ctx.currentTime) * 1000));
-    nextT += STEP; n++; } }, 25);
+  const fx = cur.fx, pat = patOf(fx), step16 = 60 / (fx.bpm || 96) / 4, late = (fx.swing || 0) * step16 * .5;
+  seq = setInterval(() => { while (nextT < ctx.currentTime + .12) { const st = n % 16, t = nextT + (st % 2 ? late : 0);
+    Object.keys(pat).forEach(k => pat[k][st] && hit(k, t, pat[k][st]));
+    setTimeout(() => { if (cur && cur.fx === fx && on) $('lnVizHear').innerHTML = beatSVG(fx, st); }, Math.max(0, (t - ctx.currentTime) * 1000));
+    nextT += step16; n++; } }, 25);
 }
 function apply() {
   cancelAnimationFrame(raf); const e = cur, g = LEARN[gid];
@@ -2170,24 +2197,25 @@ function setStep(s) {
   if (s !== 1 && on) stopAudio();
   if (s === 2) showHowto(gid, $('lnHow')); else showHowto(null);
 }
+let back = 'vPlay';
 function open(id, first) {
   const g = LEARN[id]; if (!g) return;
   if (playing) stop();
-  gid = id; seen.add(id); try { localStorage.setItem('clt-learn', JSON.stringify([...seen])); } catch (e) {}
+  gid = id; back = id === 'maker' ? 'vFree' : 'vPlay'; seen.add(id); try { localStorage.setItem('clt-learn', JSON.stringify([...seen])); } catch (e) {}
   show('vLearn');
   $('vLearn').style.setProperty('--sk', `var(${SKVAR[g.skill]})`);
   $('lnSkill').textContent = g.skill; $('lnName').textContent = g.name; $('lnJob').textContent = g.job;
-  $('lnGo').textContent = first ? 'Start game' : 'Back to the game';
+  $('lnGo').textContent = id === 'maker' ? (first ? 'Start making beats' : 'Back to Beat Maker') : first ? 'Start game' : 'Back to the game';
   $('lnIdea').innerHTML = g.idea.map(x => `<li>${x}</li>`).join('');
   $('lnWords').innerHTML = g.words.map(([w, d]) => `<div class="ln-word"><b>${w}</b>${d}</div>`).join('');
   setViz($('lnVizIdea'), picture(g, g.ideaFx || { t:'beat', rows:['kick','snare','hat'] }, g.viz === 'freq' ? freqLabel(g.ideaFx) : ''));
-  $('lnTip').innerHTML = id === 'beat' ? 'Press Play and count along. Click each step to add a drum.' : id === 'pan' ? 'Put headphones on, press Play, then click each spot.'
+  $('lnTip').innerHTML = id === 'maker' ? 'Press Play, then click each example to hear what tempo, swing and velocity do.' : id === 'beat' ? 'Press Play and count along. Click each step to add a drum.' : id === 'pan' ? 'Put headphones on, press Play, then click each spot.'
     : 'Press Play, then click each example. Flip back to <b>' + g.ex[0].l + '</b> to compare.';
   $('lnExs').innerHTML = g.ex.map((e, i) => `<button class="ln-ex" type="button" data-i="${i}" aria-pressed="false"><b>${e.l}</b><span>${e.h}</span></button>`).join('');
   $('lnExs').querySelectorAll('.ln-ex').forEach(b => b.onclick = () => choose(+b.dataset.i));
   choose(0, true); setStep(0);
 }
-const go = () => { stopAudio(); showHowto(null); show('vPlay'); };
+const go = () => { stopAudio(); showHowto(null); show(back); };
 $('lnTabs').querySelectorAll('button').forEach(b => b.onclick = () => setStep(+b.dataset.s));
 $('lnBack').onclick = () => setStep(Math.max(0, step - 1));
 $('lnNext').onclick = () => step === 2 ? go() : setStep(step + 1);

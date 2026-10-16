@@ -48,7 +48,9 @@ Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped
   1. **The idea**: a live picture (frequency graph, level meters, waveform, reverb tail, stereo position or drum grid), a short lesson and "Words to know".
   2. **Hear it**: Play plus labeled examples (e.g. "HPF 1 kHz: phone call"). They play the current source through the game's own chain builders (`filterChain`, `eqChain`, ...) into `master`. Filter Expert and Peak Finder have Sweep examples.
   3. **How to play**: the existing HOWTO demo, shown inside the card via `showHowto(id, container)`.
-  - The text lives in `LEARN` (next to `HOWTO`). Seen games are stored in localStorage `clt-learn`. "What is this?" in the play view reopens it ("Back to the game"). The how-to box no longer pops up on its own in games; Beat Maker still uses it the old way.
+  - The text lives in `LEARN` (next to `HOWTO`). Seen games are stored in localStorage `clt-learn`. "What is this?" in the play view reopens it ("Back to the game"). The how-to box no longer pops up on its own. Beat Maker has its own Learn card (`LEARN.maker`: tempo, swing, velocity, pan; opened from "What is this?" in Beat Maker and the first time it opens; it returns to `vFree`).
+- **Reverb Space** always plays a single synthesized clap (`makeClap`, a 3.6 s loop) instead of the chosen source, and the source picker is locked while it is open. Clicking A, B, X or a Learn example restarts the clap so the change is heard at once.
+- **Phones:** `.wrap` (and the dashboard's `#main`) use `grid-template-columns:minmax(0,1fr)` so no header piece can push the page wider than the screen. Wide tables and the Beat Maker grid scroll inside their own boxes.
 - **Leaderboard:** a button in the top bar. It can be sorted by game, scoped to class or world, and is fed by `postScore`.
 - **Feedback:** a "Send feedback" modal at the bottom of the home view.
 - **Beat Maker (free play):**
@@ -69,6 +71,7 @@ Edit the HTML files directly. Earlier sessions edited a scratch copy and wrapped
 - Tabs: Students, Assign, Tests, Leaderboard (with delete), Feedback (admins only), Classes and Admin.
 - Classes can use a custom code (4–7 characters, A–Z and 0–9). Deleting a class requires typing its code.
 - A "← Back to the Lab" link sits in the header.
+- Leaderboard tab: admins also see a "World only (no class)" table (scores with `class_code == ''`), so those can be deleted here too.
 
 ## Testing locally
 - Serve the repo root with `python3 -m http.server 8766`, then open `http://localhost:8766/`.
