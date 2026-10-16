@@ -116,6 +116,20 @@ const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')
 const daysBack = n => Array.from({ length:n }, (_, k) => ymd(new Date(Date.now() - (n - 1 - k) * 864e5)));
 const S = { email:'', classes:[], code:'', view:'students', rows:[], sort:{ k:'today', dir:-1 }, tests:[], testId:'' };
 const cls = () => S.classes.find(c => c.code === S.code);
+// Remember where the teacher was (class, tab, time range, sort, test) so a refresh comes back to the same place.
+const KEEP = 'cll-teacher-view';
+const remember = () => { try { localStorage.setItem(KEEP, JSON.stringify({ code:S.code, view:S.view, rng:$('rng').value, sort:S.sort, testId:S.testId })); } catch (e) {} };
+const pressView = () => $('views').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === S.view));
+function restore() {
+  let k = null; try { k = JSON.parse(localStorage.getItem(KEEP)); } catch (e) {}
+  if (!k) return;
+  if (k.code) S.code = k.code;
+  if ($('views').querySelector(`[data-v="${k.view}"]`)) S.view = k.view;
+  if (k.sort && k.sort.k) S.sort = k.sort;
+  if (k.testId) S.testId = k.testId;
+  if ([...$('rng').options].some(o => o.value === k.rng)) $('rng').value = k.rng;
+  pressView();
+}
 const addDays = (k, n) => { const [y, m, d] = k.split('-').map(Number); return ymd(new Date(y, m - 1, d + n)); };
 const niceDay = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' }); };
 const toMs = v => v && typeof v.toMillis === 'function' ? v.toMillis() : v && v.seconds ? v.seconds * 1000 : v instanceof Date ? +v : 0;
@@ -147,6 +161,7 @@ async function signedIn(email) {
   $('who').innerHTML = `Signed in as <b>${esc(email)}</b>`; $('whoRow').hidden = false;
   if (!ok) return requestScreen(email);
   S.email = email; $('views').querySelector('[data-v=admin]').hidden = !ADMIN_EMAILS.includes(email);
+  if (S.view === 'admin' && !ADMIN_EMAILS.includes(email)) { S.view = 'students'; pressView(); }
   $('gate').hidden = true; $('main').hidden = false;
   await loadClasses();
 }
@@ -177,7 +192,7 @@ function fillClasses() {
   load();
 }
 async function load() {
-  msg('');
+  msg(''); remember();
   if (S.view === 'classes') return renderClasses();
   if (S.view === 'admin') return loadAdmin();
   if (S.view === 'feedback') return loadFeedback();
@@ -194,6 +209,7 @@ async function load() {
   } catch (e) { $('out').innerHTML = `<p class="err">${errText(e)}</p>`; }
 }
 function renderStudents() {
+  remember();
   const n = +$('rng').value, days = daysBack(n), week = daysBack(7), t = days[days.length - 1], inRange = new Set(days);
   const by = {};
   S.rows.forEach(r => { const s = by[r.sid] ||= { sid:r.sid, name:r.student, min:{}, rounds:0, correct:0, sessions:0, latest:r };
@@ -268,6 +284,7 @@ const tstate = t => !t.open ? 'closed' : (t.opens_at && toMs(t.opens_at) > Date.
 const STATE = { open:'Open', closed:'Off', soon:'Scheduled', ended:'Ended' };
 const testWhat = t => `${(INFO[t.settings.game] || ['?'])[0]} · level ${t.settings.level} · ${t.settings.rounds} rounds`;
 async function loadTests() {
+  remember();
   $('out').innerHTML = '<p class="muted">Loading…</p>'; $('stats').innerHTML = '';
   try {
     if (PREVIEW) S.tests ||= [];
@@ -446,12 +463,12 @@ function sampleRows(code) {
 }
 function wire() {
   $('cls').onchange = () => { S.code = $('cls').value; load(); };
-  $('rng').onchange = () => S.view === 'students' && renderStudents();
+  $('rng').onchange = () => { remember(); if (S.view === 'students') renderStudents(); };
   $('views').onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; S.view = b.dataset.v; $('views').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); load(); };
   $('signout').onclick = async () => { try { const { auth, authMod } = await fbAuth(); await authMod.signOut(auth); } catch (e) {} S.email = ''; signInScreen(); };
 }
 async function start() {
-  wire();
+  wire(); restore();
   if (PREVIEW) { $('gate').hidden = true; $('main').hidden = false; $('who').innerHTML = 'Signed in as <b>sample@preview</b>'; $('whoRow').hidden = false;
     $('views').querySelector('[data-v=admin]').hidden = false; $('main').insertAdjacentHTML('afterbegin', '<div class="pv">Preview with sample students. Nothing here is real.</div>');
     S.classes = [{ code:'PREVW', name:'Period 4 Recording' }, { code:'PREV2', name:'Period 6 Recording' }]; return fillClasses(); }
