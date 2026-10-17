@@ -336,13 +336,10 @@ input[type=range]{accent-color:var(--freq)}
 .ans.wrong{background:var(--bad);border-color:var(--bad);color:var(--ink)}
 /* Name That Hz: every band in one line, low to high; the possible answers are lit */
 .hzline{display:flex;gap:3px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x proximity}
-.hzline button{flex:1 0 30px;min-width:30px;padding:12px 0;font:500 .72rem var(--mono);letter-spacing:-.02em;border-radius:6px;transform:none!important;box-shadow:none;scroll-snap-align:center}
-.hzline .off{background:transparent;border:1px dashed var(--line);color:var(--muted);opacity:.45}
-.hzline .off:not(:disabled){cursor:pointer;opacity:.8}
-.hzline .off:disabled{cursor:default}
+.hzline button{flex:1 1 0;min-width:30px;white-space:pre-line;line-height:1.25;padding:12px 0;font:500 .72rem var(--mono);letter-spacing:-.02em;border-radius:6px;transform:none!important;box-shadow:none;scroll-snap-align:center}
 .hz-ends{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-top:2px}
 .hz-ends .ph{display:none}
-@media (max-width:560px){.hzline{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow:visible}.hzline button{min-width:0}.hz-ends .wd{display:none}.hz-ends .ph{display:inline}}
+@media (max-width:560px){.hzline.many{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));overflow:visible}.hzline button{min-width:0}.hz-ends .wd{display:none}.hz-ends .ph{display:inline}}
 .feedback .ok{color:var(--ok)} .feedback .bad{color:var(--bad)} .feedback .up{color:var(--accent);font-family:var(--display);font-weight:400}
 .strip{border:2px solid var(--line);background:linear-gradient(90deg,rgba(255,62,165,.06),rgba(46,230,255,.06)),var(--screen)}
 .strip .mk.guess{background:var(--freq);box-shadow:0 0 10px var(--freq);width:4px}
@@ -1731,20 +1728,21 @@ const GAMES = [
   { id:'tone', name:'Name That Hz', skill:'Frequency', icon:'tone', noAB:true,
     tagline:'A single test tone plays. Name its frequency.',
     blurb:'A pure test tone plays on and off. Name its frequency. Lower tones hum, higher tones whistle.',
-    levels:['3 choices far apart', '4 choices, 2 octaves apart', '6 choices, 1 octave apart', 'All 10 octave bands', '⅓ octave: 6 neighbors', '⅓ octave: 12 neighbors', 'All 31 bands in your range', 'Click the strip within ⅓ octave'],
+    levels:['4 bands: low, low-mid, high-mid, high', '6 bands', '8 bands', '8 bands, tone anywhere in the band', '12 bands, tone anywhere in the band', 'Every ⅓-octave band', 'Click the strip within ⅓ octave'],
+    // The bands in the student's range are split into wide groups that cover the whole spectrum; each level splits them finer.
+    // Levels 1-3 always play the middle band of a group, so the answers are easy to tell apart at first.
     round(L) {
-      const [lo, hi] = toneRange(), inR = f => f >= lo && f <= hi, all = ISO31.filter(inR);
-      if (L === 8) { const f = lo * Math.pow(hi / lo, Math.random());
+      const [lo, hi] = toneRange(), all = ISO31.filter(f => f >= lo && f <= hi);
+      if (L >= 7) { const f = lo * Math.pow(hi / lo, Math.random());
         return { ui:'freq', target:f, tol:1/3, tone:f, build: passChain(), freq:f, reveal:`It was ${fmtHz(f)}.`, q:'Click where the tone is on the strip.' }; }
-      let set;
-      if (L === 1) set = [100, 1000, 10000];
-      else if (L === 2) set = [125, 500, 2000, 8000];
-      else if (L === 3) set = [125, 250, 500, 1000, 2000, 4000];
-      else if (L === 4) set = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000].filter(inR);
-      else if (L === 7) set = all;
-      else { const n = L === 5 ? 6 : 12, i = Math.floor(Math.random() * all.length), st = Math.max(0, Math.min(all.length - n, i - Math.floor(Math.random() * n))); set = all.slice(st, st + n); }
-      const f = pick(set);
-      return { ...btns(set.map(v => [String(v), hzLabel(v)]), String(f), passChain(), `It was ${hzLabel(f)}. Click any band to hear it and compare.`, f), tone:f, line:all }; } },
+      const n = L === 6 ? all.length : [4, 6, 8, 8, 12][L - 1];
+      const groups = Array.from({ length:n }, (_, i) => all.slice(Math.floor(i * all.length / n), Math.floor((i + 1) * all.length / n)));
+      const mid = gr => gr[Math.floor(gr.length / 2)], short = v => v >= 1000 ? `${+(v / 1000).toFixed(2)}k` : `${v}`;
+      const gi = Math.floor(Math.random() * n), gr = groups[gi], f = L <= 3 ? mid(gr) : pick(gr);
+      const label = (g, i) => L === 1 ? `${['Low', 'Low-mid', 'High-mid', 'High'][i]}\n${hzLabel(mid(g))}` : g.length === 1 ? short(g[0]) : L <= 3 ? hzLabel(mid(g)) : `${short(g[0])}–${short(g[g.length - 1])}`;
+      const name = L === 1 ? ` (${['low', 'low-mid', 'high-mid', 'high'][gi]})` : '';
+      return { ...btns(groups.map((g, i) => [String(i), label(g, i)]), String(gi), passChain(), `It was ${hzLabel(f)}${name}. Click any band to hear it and compare.`, f),
+        tone:f, segs: groups.map(g => ({ w: g.length, f: mid(g) })) }; } },
   { id:'beat', name:'Beat Recreate', skill:'Rhythm', icon:'beat', rounds:6,
     tagline:'Hear a drum beat, then rebuild it on a 16-step grid.',
     blurb:'A plays the target beat on a loop. Click cells to build your copy, and B plays yours. Each column is a 16th note; the numbers are the beats.',
@@ -1868,7 +1866,7 @@ function newRound() {
   R = S.g.round(S.level); answered = false; roundStart = performance.now();
   $('hLevel').textContent = S.level; $('hRound').textContent = `${S.i + 1}/${S.rounds}`; $('hScore').textContent = S.score;
   $('prog').innerHTML = Array.from({ length:S.rounds }, (_, k) => `<i class="${k < S.results.length ? (S.results[k] ? 'ok' : 'bad') : k === S.i ? 'cur' : ''}"></i>`).join('');
-  $('feedback').textContent = R.ui === 'grid' ? 'Press Play to hear the target beat. Click the grid to build yours, press B to hear it, then Check.' : S.g.noAB ? (R.line ? 'Press Play, listen to the tone, then click one of the lit bands.' : 'Press Play, listen to the tone, then click where it is on the strip.') : S.i === 0 ? 'Press Play, flip between A and B, then answer.' : 'New round. Flip A and B, then answer.';
+  $('feedback').textContent = R.ui === 'grid' ? 'Press Play to hear the target beat. Click the grid to build yours, press B to hear it, then Check.' : S.g.noAB ? (R.segs ? 'Press Play, listen to the tone, then click the band it falls in.' : 'Press Play, listen to the tone, then click where it is on the strip.') : S.i === 0 ? 'Press Play, flip between A and B, then answer.' : 'New round. Flip A and B, then answer.';
   $('question').textContent = `Level ${S.level}: ${R.q || S.g.levels[S.level - 1]}`;
   $('next').hidden = true; renderAnswer(); updateCover(); wireChain(); setSide('A'); renderSong();
   showHowto(null);   // the how-to now lives in the Learn screen
@@ -1876,17 +1874,13 @@ function newRound() {
 }
 function renderAnswer() {
   const area = $('answerArea'); area.innerHTML = ''; resetHist(); { const v = viewOf(); $('anBox').parentElement.hidden = v === 'none'; $('anLabel').textContent = VIEW_NAMES[v] || 'Analyzer'; } $('spec').parentElement.classList.toggle('tall', R.stereo != null || ['gain','comp','space'].includes(S.g.id));
-  if (R.ui === 'buttons' && R.line) {   // Name That Hz: all bands in a line, only the choices lit
-    const on = new Set(R.options.map(o => o[0])), bands = [...new Set([...R.line, ...R.options.map(o => +o[0])])].sort((a, b) => a - b);
-    const line = document.createElement('div'); line.className = 'hzline';
-    bands.forEach(v => { const id = String(v), b = document.createElement('button'); b.dataset.id = id; b.title = hzLabel(v);
-      b.textContent = v >= 1000 ? `${+(v / 1000).toFixed(2)}k` : id;
-      if (on.has(id)) { b.className = 'ans'; b.onclick = () => answered ? previewTone(v) : submit(id); }
-      else { b.className = 'off'; b.disabled = true; b.onclick = () => answered && previewTone(v); }
-      line.appendChild(b); });
-    const ends = document.createElement('div'); ends.className = 'hz-ends'; ends.innerHTML = '<span class="wd">← lower (Hz)</span><span class="wd">It\'s one of the lit bands</span><span class="wd">higher →</span><span class="ph">Low to high, left to right. It\'s one of the lit bands.</span>';
+  if (R.ui === 'buttons' && R.segs) {   // Name That Hz: the whole spectrum in one line, split into bands (width = how many ⅓ octaves)
+    const line = document.createElement('div'); line.className = 'hzline' + (R.segs.length > 8 ? ' many' : '');
+    R.options.forEach(([id, label], i) => { const b = document.createElement('button'); b.className = 'ans'; b.dataset.id = id; b.textContent = label;
+      b.style.flexGrow = R.segs[i].w; b.onclick = () => answered ? previewTone(R.segs[i].f) : submit(id); line.appendChild(b); });
+    const ends = document.createElement('div'); ends.className = 'hz-ends';
+    ends.innerHTML = R.segs.length > 8 ? '<span class="wd">← lower</span><span class="wd">higher →</span><span class="ph">Low to high, left to right.</span>' : '<span>← lower</span><span>higher →</span>';
     area.append(line, ends);
-    const first = line.querySelector('.ans'); if (first && line.scrollWidth > line.clientWidth) line.scrollLeft = first.offsetLeft - line.clientWidth / 2;
     return;
   }
   if (R.ui === 'buttons') {
@@ -2550,7 +2544,6 @@ function submit(resp) {
   if (R.ui === 'grid') { ({ ok, acc, extra } = checkGrid()); }
   else if (R.ui === 'buttons') {
     ok = resp === R.answer; acc = ok ? 1 : 0;
-    document.querySelectorAll('.hzline .off').forEach(b => { b.disabled = false; });
     document.querySelectorAll('.ans').forEach(b => { b.disabled = !R.tone;
       if (b.dataset.id === R.answer) b.classList.add('correct'); else if (b.dataset.id === resp) b.classList.add('wrong'); });
   } else {
