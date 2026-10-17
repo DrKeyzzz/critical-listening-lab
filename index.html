@@ -113,6 +113,7 @@ input[type=range]{accent-color:var(--accent);width:120px}
 .progress i.ok{background:var(--ok);border-color:var(--ok)} .progress i.bad{background:var(--bad);border-color:var(--bad)} .progress i.cur{border-color:var(--accent)}
 .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px}
 @media (max-width:760px){.grid{grid-template-columns:1fr}}
+.grid.wide{grid-template-columns:1fr}   /* Name That Hz: the band line gets the full width */
 .transport{display:grid;gap:10px}
 .ab{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ab .btn{flex-direction:column;gap:2px;padding:14px 8px}
@@ -333,6 +334,15 @@ input[type=range]{accent-color:var(--freq)}
 .ans:hover:not(:disabled){border-color:var(--accent);color:var(--accent);transform:rotate(-1.5deg) scale(1.03)}
 .ans.correct{background:var(--ok);border-color:var(--ok);color:var(--ink);box-shadow:0 0 16px rgba(125,255,106,.5)}
 .ans.wrong{background:var(--bad);border-color:var(--bad);color:var(--ink)}
+/* Name That Hz: every band in one line, low to high; the possible answers are lit */
+.hzline{display:flex;gap:3px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x proximity}
+.hzline button{flex:1 0 30px;min-width:30px;padding:12px 0;font:500 .72rem var(--mono);letter-spacing:-.02em;border-radius:6px;transform:none!important;box-shadow:none;scroll-snap-align:center}
+.hzline .off{background:transparent;border:1px dashed var(--line);color:var(--muted);opacity:.45}
+.hzline .off:not(:disabled){cursor:pointer;opacity:.8}
+.hzline .off:disabled{cursor:default}
+.hz-ends{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-top:2px}
+.hz-ends .ph{display:none}
+@media (max-width:560px){.hzline{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow:visible}.hzline button{min-width:0}.hz-ends .wd{display:none}.hz-ends .ph{display:inline}}
 .feedback .ok{color:var(--ok)} .feedback .bad{color:var(--bad)} .feedback .up{color:var(--accent);font-family:var(--display);font-weight:400}
 .strip{border:2px solid var(--line);background:linear-gradient(90deg,rgba(255,62,165,.06),rgba(46,230,255,.06)),var(--screen)}
 .strip .mk.guess{background:var(--freq);box-shadow:0 0 10px var(--freq);width:4px}
@@ -1734,7 +1744,7 @@ const GAMES = [
       else if (L === 7) set = all;
       else { const n = L === 5 ? 6 : 12, i = Math.floor(Math.random() * all.length), st = Math.max(0, Math.min(all.length - n, i - Math.floor(Math.random() * n))); set = all.slice(st, st + n); }
       const f = pick(set);
-      return { ...btns(set.map(v => [String(v), hzLabel(v)]), String(f), passChain(), `It was ${hzLabel(f)}. Click any answer to hear it and compare.`, f), tone:f }; } },
+      return { ...btns(set.map(v => [String(v), hzLabel(v)]), String(f), passChain(), `It was ${hzLabel(f)}. Click any band to hear it and compare.`, f), tone:f, line:all }; } },
   { id:'beat', name:'Beat Recreate', skill:'Rhythm', icon:'beat', rounds:6,
     tagline:'Hear a drum beat, then rebuild it on a 16-step grid.',
     blurb:'A plays the target beat on a loop. Click cells to build your copy, and B plays yours. Each column is a 16th note; the numbers are the beats.',
@@ -1849,7 +1859,7 @@ function startSession(gid, rounds, workout, test) {
   const grid = g.id === 'beat'; $('btnA').querySelector('span').textContent = grid ? 'Target beat' : 'Original'; $('btnB').querySelector('span').textContent = grid ? 'Your beat' : 'Processed';
   if (playing) stop();
   $('src').disabled = gid === 'space' || gid === 'tone'; $('src').title = gid === 'space' ? 'Reverb Space always uses a single clap, so you can hear the whole tail.' : gid === 'tone' ? 'Name That Hz plays test tones, not music.' : '';
-  $('btnA').parentElement.hidden = !!g.noAB; $('toneRangeWrap').hidden = gid !== 'tone' || !!test;
+  $('btnA').parentElement.hidden = !!g.noAB; document.querySelector('#vPlay > .grid').classList.toggle('wide', g.id === 'tone'); $('toneRangeWrap').hidden = gid !== 'tone' || !!test;
   show('vPlay'); newRound();
   if (!test && LN.isNew(gid)) LN.open(gid, true);   // first time in this game: teach it first
 }
@@ -1858,7 +1868,7 @@ function newRound() {
   R = S.g.round(S.level); answered = false; roundStart = performance.now();
   $('hLevel').textContent = S.level; $('hRound').textContent = `${S.i + 1}/${S.rounds}`; $('hScore').textContent = S.score;
   $('prog').innerHTML = Array.from({ length:S.rounds }, (_, k) => `<i class="${k < S.results.length ? (S.results[k] ? 'ok' : 'bad') : k === S.i ? 'cur' : ''}"></i>`).join('');
-  $('feedback').textContent = R.ui === 'grid' ? 'Press Play to hear the target beat. Click the grid to build yours, press B to hear it, then Check.' : S.i === 0 ? 'Press Play, flip between A and B, then answer.' : 'New round. Flip A and B, then answer.';
+  $('feedback').textContent = R.ui === 'grid' ? 'Press Play to hear the target beat. Click the grid to build yours, press B to hear it, then Check.' : S.g.noAB ? (R.line ? 'Press Play, listen to the tone, then click one of the lit bands.' : 'Press Play, listen to the tone, then click where it is on the strip.') : S.i === 0 ? 'Press Play, flip between A and B, then answer.' : 'New round. Flip A and B, then answer.';
   $('question').textContent = `Level ${S.level}: ${R.q || S.g.levels[S.level - 1]}`;
   $('next').hidden = true; renderAnswer(); updateCover(); wireChain(); setSide('A'); renderSong();
   showHowto(null);   // the how-to now lives in the Learn screen
@@ -1866,6 +1876,19 @@ function newRound() {
 }
 function renderAnswer() {
   const area = $('answerArea'); area.innerHTML = ''; resetHist(); { const v = viewOf(); $('anBox').parentElement.hidden = v === 'none'; $('anLabel').textContent = VIEW_NAMES[v] || 'Analyzer'; } $('spec').parentElement.classList.toggle('tall', R.stereo != null || ['gain','comp','space'].includes(S.g.id));
+  if (R.ui === 'buttons' && R.line) {   // Name That Hz: all bands in a line, only the choices lit
+    const on = new Set(R.options.map(o => o[0])), bands = [...new Set([...R.line, ...R.options.map(o => +o[0])])].sort((a, b) => a - b);
+    const line = document.createElement('div'); line.className = 'hzline';
+    bands.forEach(v => { const id = String(v), b = document.createElement('button'); b.dataset.id = id; b.title = hzLabel(v);
+      b.textContent = v >= 1000 ? `${+(v / 1000).toFixed(2)}k` : id;
+      if (on.has(id)) { b.className = 'ans'; b.onclick = () => answered ? previewTone(v) : submit(id); }
+      else { b.className = 'off'; b.disabled = true; b.onclick = () => answered && previewTone(v); }
+      line.appendChild(b); });
+    const ends = document.createElement('div'); ends.className = 'hz-ends'; ends.innerHTML = '<span class="wd">← lower (Hz)</span><span class="wd">It\'s one of the lit bands</span><span class="wd">higher →</span><span class="ph">Low to high, left to right. It\'s one of the lit bands.</span>';
+    area.append(line, ends);
+    const first = line.querySelector('.ans'); if (first && line.scrollWidth > line.clientWidth) line.scrollLeft = first.offsetLeft - line.clientWidth / 2;
+    return;
+  }
   if (R.ui === 'buttons') {
     const pad = document.createElement('div'); pad.className = 'pad';
     R.options.forEach(([id, label]) => { const b = document.createElement('button'); b.className = 'ans'; b.dataset.id = id; b.textContent = label; b.onclick = () => answered && R.tone ? previewTone(+id) : submit(id); pad.appendChild(b); });
@@ -2527,6 +2550,7 @@ function submit(resp) {
   if (R.ui === 'grid') { ({ ok, acc, extra } = checkGrid()); }
   else if (R.ui === 'buttons') {
     ok = resp === R.answer; acc = ok ? 1 : 0;
+    document.querySelectorAll('.hzline .off').forEach(b => { b.disabled = false; });
     document.querySelectorAll('.ans').forEach(b => { b.disabled = !R.tone;
       if (b.dataset.id === R.answer) b.classList.add('correct'); else if (b.dataset.id === resp) b.classList.add('wrong'); });
   } else {
