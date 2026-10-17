@@ -97,7 +97,7 @@ const FIREBASE = { apiKey: 'AIzaSyDU9vbCWJ4yWuD8bAX984DmQF4dvo13BHs', authDomain
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const TEACHER_EMAILS = ['milnesda@eht.k12.nj.us', 'dcmilnes@gmail.com'], ADMIN_EMAILS = ['milnesda@eht.k12.nj.us', 'dcmilnes@gmail.com'];   // must match firestore.rules
 const GOAL = 25;
-const GAMES = [['filter','Filter'],['peak','Peak'],['eq','Boost/Cut'],['gain','Gain'],['comp','Comp'],['pan','Balance'],['space','Reverb'],['beat','Beat']];
+const GAMES = [['filter','Filter'],['peak','Peak'],['eq','Boost/Cut'],['gain','Gain'],['comp','Comp'],['pan','Balance'],['space','Reverb'],['tone','Hz'],['beat','Beat']];
 // full names and level labels, copied from the Listening Lab's GAMES (keep in step with ../index.html)
 const INFO = {
   filter:['Filter Spotter', ['HPF or LPF? (mid cutoffs)', 'HPF or LPF? (subtle cutoffs)', 'Name the cutoff: 3 choices', 'Name the cutoff: 4 choices', 'Name the cutoff: 4 close choices', 'Filter type and cutoff: 6 choices', 'Name the cutoff: 6 close choices', 'Click the cutoff within ½ octave']],
@@ -107,6 +107,7 @@ const INFO = {
   comp:['Compressor Ears', ['Compressed or not? (medium)', 'Compressed or not? (light)', 'None, light or heavy?', 'Which ratio? 4 choices', 'Which ratio? 4 close choices']],
   pan:['Balance Test', ['Left or right? (halfway)', 'Left, center or right?', 'Wide left to wide right', 'Place it within 25%', 'Place it within 12%']],
   space:['Reverb Space', ['Reverb or dry?', 'Room or hall?', 'Short, medium or long decay?', 'Which decay time? 4 choices', 'How much reverb? 4 choices']],
+  tone:['Name That Hz', ['3 choices far apart', '4 choices, 2 octaves apart', '6 choices, 1 octave apart', 'All 10 octave bands', '⅓ octave: 6 neighbors', '⅓ octave: 12 neighbors', 'All 31 bands in your range', 'Click the strip within ⅓ octave']],
   beat:['Beat Recreate', ['Kick and snare', 'Kick, snare and hi-hat', 'Syncopated kick, 16th hats', 'Add tambourine', 'Five parts, open hat, ghost notes', 'Hi-hat velocity', 'Velocity on hi-hat and kick']],
 };
 const PREVIEW = new URLSearchParams(location.search).has('preview');

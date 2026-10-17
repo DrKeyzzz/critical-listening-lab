@@ -392,6 +392,7 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
 .howto{display:grid;gap:12px;border-color:var(--accent)!important;box-shadow:6px 6px 0 var(--accent)!important}
 .how-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:center}
 @media (max-width:760px){.how-grid{grid-template-columns:1fr}}
+.how-grid.one{grid-template-columns:1fr}
 .how-steps{margin:0;padding-left:0;list-style:none;display:grid;gap:8px;counter-reset:st}
 .how-steps li{counter-increment:st;position:relative;padding:10px 12px 10px 52px;border-radius:10px;border:2px solid transparent;color:var(--muted);transition:all .25s;font-size:15px}
 .how-steps li::before{content:counter(st);position:absolute;left:10px;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:400 16px var(--display);background:var(--line);color:var(--fg)}
@@ -634,6 +635,8 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
     <div class="grid">
       <div class="panel transport">
         <p class="blurb" id="gBlurb"></p>
+        <label class="hint" id="toneRangeWrap" hidden style="display:grid;gap:4px">Range (which tones can come up)
+          <select id="toneRange"><option value="std">63 Hz to 12.5 kHz (speakers)</option><option value="wide">31.5 Hz to 16 kHz (headphones)</option><option value="full">20 Hz to 20 kHz (full range)</option></select></label>
         <button class="btn primary big" id="play"><span id="playLabel">Play</span></button>
         <div class="ab">
           <button class="btn" id="btnA" aria-pressed="true"><i class="lamp"></i><b>A</b><span>Original</span></button>
@@ -955,8 +958,8 @@ async function start() {
 async function startInner() {
   if (R && R.ui === 'grid') { stopSrc(); startSeq(); playing = true; $('playLabel').textContent = 'Stop'; return; }
   stopSeq();
-  let got, kind = S && S.g.id === 'space' ? 'clap' : $('src').value;
-  try { got = await getBuffer(kind); }
+  let got, kind = S && S.g.id === 'space' ? 'clap' : S && S.g.id === 'tone' ? 'tone' : $('src').value;
+  try { got = kind === 'tone' ? toneBuf(R.tone) : await getBuffer(kind); }
   catch (e) { showStatus("The class track didn't load, so the jazz loop is playing instead."); $('src').value = kind = 'combo'; got = await getBuffer('combo'); renderSong(); }
   if (!got) return;
   const sp = spanFor(kind, got);
@@ -966,6 +969,30 @@ async function startInner() {
   playSpan = sp; playT0 = ctx.currentTime;
   playing = true; $('playLabel').textContent = 'Stop'; drawSong();
 }
+/* ================= Name That Hz: test tones ================= */
+// The 31 ISO third-octave bands (a 31-band graphic EQ). Range keeps tones the student's speakers can play.
+const ISO31 = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
+const TONE_RANGES = { std:[63, 12500], wide:[31.5, 16000], full:[20, 20000] };
+const toneRange = () => { let k = 'std'; try { k = localStorage.getItem('clt-tone-range') || 'std'; } catch (e) {} return TONE_RANGES[k] || TONE_RANGES.std; };
+const hzLabel = f => f >= 1000 ? `${+(f / 1000).toFixed(2)} kHz` : `${f} Hz`;
+const toneLevel = f => f > 8000 ? .12 : .22;   // quiet, and highs softer so they never pierce
+const toneBufs = new Map();
+function toneBuf(f) {   // 1 s tone + 0.5 s silence, soft 30 ms fades, looped while playing
+  const key = Math.round(f * 10); if (toneBufs.has(key)) return toneBufs.get(key);
+  const sr = ctx.sampleRate, n = Math.round(sr * 1.5), on = sr, fade = Math.round(sr * .03), b = ctx.createBuffer(2, n, sr), a = toneLevel(f);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c);
+    for (let i = 0; i < on; i++) d[i] = a * Math.sin(2 * Math.PI * f * i / sr) * Math.min(1, i / fade, (on - i) / fade); }
+  toneBufs.set(key, b); return b;
+}
+let previewSrc = null;
+function previewTone(f) {   // after answering: hear any choice once
+  ensureCtx(); if (playing) stop();
+  if (previewSrc) { try { previewSrc.stop(); } catch (e) {} }
+  previewSrc = ctx.createBufferSource(); previewSrc.buffer = toneBuf(f); previewSrc.connect(master); previewSrc.start();
+  $('feedback').querySelector('.hear')?.remove();
+  $('feedback').insertAdjacentHTML('beforeend', ` <span class="hear">Playing ${hzLabel(f)}.</span>`);
+}
+
 /* ================= Song strip: see the whole song, pick where it starts, loop a part ================= */
 // REG[source] = { start, end, loop } in seconds, kept for this visit. Loop off plays from the start point to the
 // end of the song and then back to the start point; loop on repeats start to end.
@@ -973,7 +1000,7 @@ const REG = {}, PEAKS = new WeakMap();
 let playSpan = null, playT0 = 0, songBuf = null, songRaf = 0;
 function spanFor(kind, got) {
   const { buf, loopStart = 0, loopEnd = 0 } = got instanceof AudioBuffer ? { buf: got } : got;
-  if (kind === 'clap') return { buf, ls: 0, le: buf.duration, off: 0 };
+  if (kind === 'clap' || kind === 'tone') return { buf, ls: 0, le: buf.duration, off: 0 };
   const dflt = [loopStart, loopEnd || buf.duration];
   const r = REG[kind] ||= { start: dflt[0], end: dflt[1], loop: false, dflt, dur: buf.duration };
   const le = r.loop ? r.end : buf.duration;
@@ -989,7 +1016,7 @@ function peaksOf(buf) {
 }
 async function renderSong() {
   const box = $('song'), kind = $('src').value;
-  const want = S && !$('vPlay').hidden && S.g.id !== 'space' && R && R.ui !== 'grid' && kind !== 'pink';
+  const want = S && !$('vPlay').hidden && S.g.id !== 'space' && S.g.id !== 'tone' && R && R.ui !== 'grid' && kind !== 'pink';
   if (!want) { box.hidden = true; return; }
   let got; try { got = await getBuffer(kind); } catch (e) { got = null; }
   if (!got || kind !== $('src').value) { box.hidden = true; return; }
@@ -1601,6 +1628,7 @@ const ICONS = {
   filter:'M2 26 C12 26 14 6 24 6 L62 6', peak:'M2 18 L22 18 C27 18 28 4 32 4 C36 4 37 18 42 18 L62 18',
   eq:'M2 16 L12 16 C16 16 16 5 20 5 C24 5 24 16 28 16 L34 16 C38 16 38 27 42 27 C46 27 46 16 50 16 L62 16',
   gain:'M8 28 V20 M18 28 V14 M28 28 V9 M38 28 V5 M50 12 L56 6 L62 12 M56 6 V26', comp:'M2 30 L28 12 L62 6 M2 30 L40 2',
+  tone:'M2 16 C8 2 14 2 20 16 S32 30 38 16 S50 2 56 16 L62 16',
   beat:'M4 6 H10 M18 6 H24 M32 6 H38 M46 6 H52 M4 16 H10 M32 16 H38 M18 26 H24 M46 26 H52 M60 26 H62',
   pan:'M2 16 H62 M44 6 V26 M32 12 V20', space:'M2 16 L6 3 L10 29 L14 6 L18 26 L22 9 L26 22 L30 12 L34 19 L38 14 L42 17 L62 16'
 };
@@ -1690,6 +1718,23 @@ const GAMES = [
       const ds = { 2:[0.6,1.8], 3:[0.4,1.2,3], 4:[0.3,0.8,1.6,3] }[L], d = pick(ds);
       const lab = v => L === 2 ? (v < 1 ? 'Room\n0.6 s' : 'Hall\n1.8 s') : `${v} s`;
       return { ...btns(ds.map(v => [String(v), lab(v)]), String(d), reverbChain(d, .45), `${d} s decay.`), tail:{ decay:d, mix:.45 } }; } },
+  { id:'tone', name:'Name That Hz', skill:'Frequency', icon:'tone', noAB:true,
+    tagline:'A single test tone plays. Name its frequency.',
+    blurb:'A pure test tone plays on and off. Name its frequency. Lower tones hum, higher tones whistle.',
+    levels:['3 choices far apart', '4 choices, 2 octaves apart', '6 choices, 1 octave apart', 'All 10 octave bands', '⅓ octave: 6 neighbors', '⅓ octave: 12 neighbors', 'All 31 bands in your range', 'Click the strip within ⅓ octave'],
+    round(L) {
+      const [lo, hi] = toneRange(), inR = f => f >= lo && f <= hi, all = ISO31.filter(inR);
+      if (L === 8) { const f = lo * Math.pow(hi / lo, Math.random());
+        return { ui:'freq', target:f, tol:1/3, tone:f, build: passChain(), freq:f, reveal:`It was ${fmtHz(f)}.`, q:'Click where the tone is on the strip.' }; }
+      let set;
+      if (L === 1) set = [100, 1000, 10000];
+      else if (L === 2) set = [125, 500, 2000, 8000];
+      else if (L === 3) set = [125, 250, 500, 1000, 2000, 4000];
+      else if (L === 4) set = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000].filter(inR);
+      else if (L === 7) set = all;
+      else { const n = L === 5 ? 6 : 12, i = Math.floor(Math.random() * all.length), st = Math.max(0, Math.min(all.length - n, i - Math.floor(Math.random() * n))); set = all.slice(st, st + n); }
+      const f = pick(set);
+      return { ...btns(set.map(v => [String(v), hzLabel(v)]), String(f), passChain(), `It was ${hzLabel(f)}. Click any answer to hear it and compare.`, f), tone:f }; } },
   { id:'beat', name:'Beat Recreate', skill:'Rhythm', icon:'beat', rounds:6,
     tagline:'Hear a drum beat, then rebuild it on a 16-step grid.',
     blurb:'A plays the target beat on a loop. Click cells to build your copy, and B plays yours. Each column is a 16th note; the numbers are the beats.',
@@ -1803,7 +1848,8 @@ function startSession(gid, rounds, workout, test) {
   $('gBlurb').textContent = g.blurb; $('question').textContent = '';
   const grid = g.id === 'beat'; $('btnA').querySelector('span').textContent = grid ? 'Target beat' : 'Original'; $('btnB').querySelector('span').textContent = grid ? 'Your beat' : 'Processed';
   if (playing) stop();
-  $('src').disabled = gid === 'space'; $('src').title = gid === 'space' ? 'Reverb Space always uses a single clap, so you can hear the whole tail.' : '';
+  $('src').disabled = gid === 'space' || gid === 'tone'; $('src').title = gid === 'space' ? 'Reverb Space always uses a single clap, so you can hear the whole tail.' : gid === 'tone' ? 'Name That Hz plays test tones, not music.' : '';
+  $('btnA').parentElement.hidden = !!g.noAB; $('toneRangeWrap').hidden = gid !== 'tone' || !!test;
   show('vPlay'); newRound();
   if (!test && LN.isNew(gid)) LN.open(gid, true);   // first time in this game: teach it first
 }
@@ -1816,13 +1862,13 @@ function newRound() {
   $('question').textContent = `Level ${S.level}: ${R.q || S.g.levels[S.level - 1]}`;
   $('next').hidden = true; renderAnswer(); updateCover(); wireChain(); setSide('A'); renderSong();
   showHowto(null);   // the how-to now lives in the Learn screen
-  if (playing && R.ui === 'grid') { stopSeq(); startSeq(); } else if (playing && !srcNode) start();
+  if (playing && R.ui === 'grid') { stopSeq(); startSeq(); } else if (playing && (S.g.id === 'tone' || !srcNode)) start();
 }
 function renderAnswer() {
   const area = $('answerArea'); area.innerHTML = ''; resetHist(); { const v = viewOf(); $('anBox').parentElement.hidden = v === 'none'; $('anLabel').textContent = VIEW_NAMES[v] || 'Analyzer'; } $('spec').parentElement.classList.toggle('tall', R.stereo != null || ['gain','comp','space'].includes(S.g.id));
   if (R.ui === 'buttons') {
     const pad = document.createElement('div'); pad.className = 'pad';
-    R.options.forEach(([id, label]) => { const b = document.createElement('button'); b.className = 'ans'; b.dataset.id = id; b.textContent = label; b.onclick = () => submit(id); pad.appendChild(b); });
+    R.options.forEach(([id, label]) => { const b = document.createElement('button'); b.className = 'ans'; b.dataset.id = id; b.textContent = label; b.onclick = () => answered && R.tone ? previewTone(+id) : submit(id); pad.appendChild(b); });
     area.appendChild(pad); return;
   }
   if (R.ui === 'grid') return renderGrid(area);
@@ -1905,6 +1951,11 @@ const HOWTO = {
     '<b>Listen right after the clap.</b> Reverb leaves a tail that rings out, like a gym. Dry stops short.',
     '<b>Click the answer.</b> Later levels ask how long the tail is.',
     '<b>Read the feedback</b> to see the decay time and how much reverb was on B.'] },
+  tone:{ plain:true, steps:[
+    '<b>Press Play.</b> A test tone pulses on and off. Listen to how high or low it is.',
+    '<b>Compare it to 1 kHz</b> in your head. Lower tones hum, higher tones whistle or hiss.',
+    '<b>Click the frequency</b> you think it is.',
+    '<b>After you answer, click any choice</b> to hear it and compare.'] },
   beat:{ ans:['Check my beat'], pick:0, grid:true, steps:[
     '<b>Press Play.</b> <b>A</b> plays the beat you need to copy. Count along: 1 e + a, 2 e + a.',
     '<b>Click squares</b> on the grid to build the same beat. Start with the kick, then the snare.',
@@ -1925,7 +1976,8 @@ function showHowto(id, into) {   // into: a container to show it in (the Learn s
   $('howTitle').textContent = 'How to play ' + (id === 'maker' ? 'Beat Maker' : G(id).name);
   $('howSteps').innerHTML = H.steps.map(s => `<li>${s}</li>`).join('');
   $('howNote').innerHTML = H.note || ''; $('howNote').hidden = !H.note;
-  const demo = $('howDemo');
+  const demo = $('howDemo'); demo.hidden = !!H.plain; demo.parentElement.classList.toggle('one', !!H.plain);
+  if (H.plain) { [...$('howSteps').children].forEach(li => li.classList.add('on')); return; }
   demo.innerHTML = H.custom ? PEAK_DEMO : `<div class="demo gdemo" aria-hidden="true">
     <div class="d-top">${H.maker ? '<span class="d-btn d-new">+ New row</span>' : '<span class="d-btn d-play">Play</span><span class="d-btn d-a">A</span><span class="d-btn d-b">B</span>'}<span class="d-now"></span></div>
     <canvas class="d-viz"></canvas>
@@ -2076,6 +2128,23 @@ const LEARN = {
       { l:'Kick only', h:'The low thump', fx:{ t:'beat', rows:['kick'] }, say:'Kick on <em>1 and 3</em>. Count along.' },
       { l:'Add snare', h:'The backbeat', fx:{ t:'beat', rows:['kick','snare'] }, say:'Snare on <em>2 and 4</em>: the backbeat.' },
       { l:'Add hi-hat', h:'Keeps time', fx:{ t:'beat', rows:['kick','snare','hat'] }, say:'Hi-hat on <em>every 8th note</em>: 1 + 2 + 3 + 4 +.' }], },
+  tone:{ name:'Name That Hz', skill:'Frequency', color:'--freq', viz:'tone',
+    job:'A single test tone plays. Name its frequency.',
+    idea:[
+      '<b>Frequency</b> is how many times a sound vibrates each second, measured in <b>Hertz (Hz)</b>. A 100 Hz tone vibrates 100 times a second. <b>1 kHz</b> is 1,000 Hz.',
+      'A <b>pure tone</b> (a sine wave) is one single frequency with nothing else in it. Real instruments mix many frequencies together, which is why this game uses test tones.',
+      'An <b>octave</b> is double the frequency: 500 Hz, 1 kHz, 2 kHz and 4 kHz are each one octave apart. To your ear every octave sounds like the same size step.',
+      'A <b>31-band graphic EQ</b> splits everything we hear into thirds of an octave, from 20 Hz to 20 kHz. Those 31 frequencies are the answers in this game.',
+      'Human hearing runs from about <b>20 Hz to 20 kHz</b>. The top end shrinks as people get older, and small speakers can\'t play deep bass, so the game starts with a safe middle range. Wear headphones and you can widen it with <b>Range</b>.',
+      'Anchors to remember: <b>1 kHz</b> is the classic test tone. Kick and bass live around <b>40 to 250 Hz</b>, voices around <b>100 Hz to 1 kHz</b> (plus overtones), and cymbal sizzle around <b>8 to 16 kHz</b>.'],
+    words:[['Hz / kHz','Vibrations per second. 1 kHz = 1,000 Hz.'],['Octave','Double the frequency: 1 kHz to 2 kHz.'],['Sine wave','A pure tone: one frequency only.'],['⅓ octave','The step between bands on a 31-band EQ.']],
+    ideaFx:{ t:'tone', f:1000 },
+    ex:[
+      { l:'1 kHz', h:'The test tone', fx:{ t:'tone', f:1000 }, say:'1 kHz: the <em>classic test tone</em>. Set your volume so this is comfortable, then compare everything to it.' },
+      { l:'100 Hz', h:'Low hum', fx:{ t:'tone', f:100 }, say:'100 Hz: a <em>low hum</em>, like an electric buzz. On tiny speakers it may be very quiet.' },
+      { l:'10 kHz', h:'High whistle', fx:{ t:'tone', f:10000 }, say:'10 kHz: a <em>thin, high whistle</em>.' },
+      { l:'Octave ladder', h:'125 Hz up to 8 kHz', fx:{ t:'tone', f:125, ladder:[125, 250, 500, 1000, 2000, 4000, 8000] }, say:'Each step is <em>one octave</em>: double the one before. Notice every step sounds like the same size jump.' },
+      { l:'Sweep low to high', h:'Hearing test', fx:{ t:'tone', f:20, sweep:[20, 20000] }, say:'From 20 Hz up to 20 kHz. <em>Raise your hand when it disappears.</em> Most teens lose it somewhere above 15 kHz.' }] },
   maker:{ name:'Beat Maker', skill:'Rhythm', color:'--rhythm', viz:'beat',
     job:'Build your own beat. No score and no wrong answers, just make something you like.',
     idea:[
@@ -2193,8 +2262,14 @@ function beatSVG(fx, playStep = -1) {
   for (let i = 0; i < 16; i++) s += `<text class="axis" x="${x0 + i*cw + Math.floor(i/4)*4 + 15}" y="${y0 + 3*rh + 14}" text-anchor="middle" ${i % 4 ? '' : 'fill="#f5f2ea"'}>${i % 4 ? count[i % 4] : i/4 + 1}</text>`;
   return `<svg viewBox="0 0 ${W} 200" role="img" aria-label="16-step drum grid">${s}</svg>`;
 }
+function toneSVG(f) {
+  const x = fx2x(Math.max(20, Math.min(20000, f)));
+  return freqSVG({ t:'none' }, fmtHz(f)).replace('</svg>',
+    `<line x1="${x}" x2="${x}" y1="${PT}" y2="${H - PB}" stroke="var(--sk)" stroke-width="4" stroke-linecap="round"/><circle cx="${x}" cy="${PT + 8}" r="6" fill="var(--sk)"/></svg>`);
+}
 function picture(g, fx, readout) {
   switch (g.viz) {
+    case 'tone': return toneSVG(fx.f || 1000);
     case 'freq': return freqSVG(fx, readout);
     case 'gain': return gainSVG(fx.t === 'gain' ? fx.db : 0);
     case 'comp': return envSVG(fx);
@@ -2210,7 +2285,7 @@ function setViz(el, html) {
 }
 const SKVAR = { Frequency:'--freq', Level:'--level', Dynamics:'--dyn', Space:'--space', Rhythm:'--rhythm' };
 const seen = (() => { try { return new Set(JSON.parse(localStorage.getItem('clt-learn') || '[]')); } catch (e) { return new Set(); } })();
-let gid = null, step = 0, cur = null, on = false, src = null, live = null, raf = 0, seq = null;
+let gid = null, step = 0, cur = null, on = false, src = null, live = null, raf = 0, seq = null, osc = null;
 function build(fx) {
   const mk = { hp:() => filterChain('highpass', fx.f), lp:() => filterChain('lowpass', fx.f), bell:() => eqChain(fx.f, fx.g, fx.q), gain:() => gainChain(fx.db),
     pan:() => panChain(fx.p), comp:() => compChain(fx.thr, fx.r), verb:() => reverbChain(fx.d, fx.mix) }[fx.t] || passChain;
@@ -2233,6 +2308,18 @@ async function startSrc() {
 }
 function stopSrc() { if (src) { try { src.stop(); } catch (e) {} src.disconnect(); src = null; } }
 function stopSeqL() { clearInterval(seq); seq = null; }
+function stopOsc() { if (osc) { const o = osc; osc = null; try { o.g.gain.setTargetAtTime(0, ctx.currentTime, .02); o.o.stop(ctx.currentTime + .1); } catch (e) {} } }
+function startOsc(fx) {   // tone examples: steady, a stepping octave ladder, or a slow sweep (20 s)
+  stopOsc(); const o = ctx.createOscillator(), gn = ctx.createGain(), t = ctx.currentTime, g = LEARN[gid];
+  o.frequency.value = fx.f; gn.gain.setValueAtTime(0, t); gn.gain.setTargetAtTime(toneLevel(fx.f), t, .02); o.connect(gn).connect(master); o.start(); osc = { o, g: gn };
+  if (!fx.ladder && !fx.sweep) return;
+  const t0 = performance.now();
+  const tick = now => { if (!osc || osc.o !== o) return; const el = Math.max(0, now - t0) / 1000;
+    const f = fx.ladder ? fx.ladder[Math.floor(el / 1.2) % fx.ladder.length] : fx.sweep[0] * Math.pow(fx.sweep[1] / fx.sweep[0], (el % 20) / 20);
+    o.frequency.setTargetAtTime(f, ctx.currentTime, fx.ladder ? .005 : .03); gn.gain.setTargetAtTime(toneLevel(f), ctx.currentTime, .05);
+    setViz($('lnVizHear'), picture(g, { ...fx, f })); raf = requestAnimationFrame(tick); };
+  raf = requestAnimationFrame(tick);
+}
 function startBeat() {
   stopSeqL(); let nextT = ctx.currentTime + .05, n = 0;
   const fx = cur.fx, pat = patOf(fx), step16 = 60 / (fx.bpm || 96) / 4, late = (fx.swing || 0) * step16 * .5;
@@ -2244,6 +2331,8 @@ function startBeat() {
 function apply() {
   cancelAnimationFrame(raf); const e = cur, g = LEARN[gid];
   if (e.fx.t === 'beat') { stopSrc(); if (live) { live.out.disconnect(); live = null; } startBeat(); return; }
+  if (e.fx.t === 'tone') { stopSrc(); stopSeqL(); if (live) { live.out.disconnect(); live = null; } startOsc(e.fx); return; }
+  stopOsc();
   stopSeqL(); swap(e.fx);
   if (gid === 'space') { stopSrc(); startSrc(); }   // the clap fires right away on every click
   else if (!src) startSrc();
@@ -2254,7 +2343,7 @@ function apply() {
     raf = requestAnimationFrame(tick); }
 }
 function stopAudio() {
-  cancelAnimationFrame(raf); stopSrc(); stopSeqL(); if (live) { try { live.out.disconnect(); } catch (e) {} live = null; }
+  cancelAnimationFrame(raf); stopSrc(); stopSeqL(); stopOsc(); if (live) { try { live.out.disconnect(); } catch (e) {} live = null; }
   on = false; $('lnPlay').textContent = '▶ Play';
 }
 function togglePlay() {
@@ -2290,7 +2379,7 @@ function open(id, first) {
   $('lnIdea').innerHTML = g.idea.map(x => `<li>${x}</li>`).join('');
   $('lnWords').innerHTML = g.words.map(([w, d]) => `<div class="ln-word"><b>${w}</b>${d}</div>`).join('');
   setViz($('lnVizIdea'), picture(g, g.ideaFx || { t:'beat', rows:['kick','snare','hat'] }, g.viz === 'freq' ? freqLabel(g.ideaFx) : ''));
-  $('lnTip').innerHTML = id === 'maker' ? 'Press Play, then click each example to hear what tempo, swing and velocity do.' : id === 'beat' ? 'Press Play and count along. Click each step to add a drum.' : id === 'pan' ? 'Put headphones on, press Play, then click each spot.'
+  $('lnTip').innerHTML = id === 'tone' ? 'Turn your volume down first. Press Play, then click each example.' : id === 'maker' ? 'Press Play, then click each example to hear what tempo, swing and velocity do.' : id === 'beat' ? 'Press Play and count along. Click each step to add a drum.' : id === 'pan' ? 'Put headphones on, press Play, then click each spot.'
     : 'Press Play, then click each example. Flip back to <b>' + g.ex[0].l + '</b> to compare.';
   $('lnExs').innerHTML = g.ex.map((e, i) => `<button class="ln-ex" type="button" data-i="${i}" aria-pressed="false"><b>${e.l}</b><span>${e.h}</span></button>`).join('');
   $('lnExs').querySelectorAll('.ln-ex').forEach(b => b.onclick = () => choose(+b.dataset.i));
@@ -2438,7 +2527,7 @@ function submit(resp) {
   if (R.ui === 'grid') { ({ ok, acc, extra } = checkGrid()); }
   else if (R.ui === 'buttons') {
     ok = resp === R.answer; acc = ok ? 1 : 0;
-    document.querySelectorAll('.ans').forEach(b => { b.disabled = true;
+    document.querySelectorAll('.ans').forEach(b => { b.disabled = !R.tone;
       if (b.dataset.id === R.answer) b.classList.add('correct'); else if (b.dataset.id === resp) b.classList.add('wrong'); });
   } else {
     const isF = R.ui === 'freq', err = isF ? Math.abs(Math.log2(resp / R.target)) : Math.abs(resp - R.target);
@@ -2700,6 +2789,8 @@ $('rAgain').onclick = () => S.test ? openTest(S.test.id) : startSession(S.g.id, 
 $('rNext').onclick = () => { const w = S.workout; startSession(w.games[w.idx + 1], 5, { games:w.games, idx:w.idx + 1 }); };
 $('vol').oninput = e => { if (master) master.gain.setTargetAtTime(+e.target.value, ctx.currentTime, 0.02); };
 $('src').onchange = () => { renderSong(); if (playing) start(); };
+try { $('toneRange').value = localStorage.getItem('clt-tone-range') || 'std'; } catch (e) {}
+$('toneRange').onchange = e => { try { localStorage.setItem('clt-tone-range', e.target.value); } catch (er) {} if (S && S.g.id === 'tone' && !answered) newRound(); };
 $('file').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   const st = $('srcStatus'); st.hidden = false; st.textContent = 'Decoding ' + f.name + '…';
@@ -2948,7 +3039,7 @@ async function finishTest(acc) {
 // One row per finished full session (10 rounds, Beat Recreate 6), not workouts or tests. Students in a class post to
 // their class board and the World board; "not in a class" students post to World only; guests don't post.
 // The board shows each player's best score in every game, plus a total of those bests. Click a column to sort by it.
-const SHORT = { filter:'Filter', peak:'Peak', eq:'Boost/Cut', gain:'Gain', comp:'Comp', pan:'Balance', space:'Reverb', beat:'Beat' };
+const SHORT = { filter:'Filter', peak:'Peak', eq:'Boost/Cut', gain:'Gain', comp:'Comp', pan:'Balance', space:'Reverb', tone:'Hz', beat:'Beat' };
 async function postScore(acc) {
   if (S.test || S.workout || P.guest || !signedIn() || S.rounds !== (S.g.rounds || 10)) return;
   const doc = { name: displayName(P).slice(0, 24), class_code: P.code && P.owner ? P.code : '', game: S.g.id, score: Math.min(100000, S.score), acc, level: S.level, rounds: S.rounds };
