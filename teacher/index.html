@@ -100,10 +100,10 @@ const GOAL = 25;
 const GAMES = [['filter','Filter'],['peak','Peak'],['eq','Boost/Cut'],['gain','Gain'],['comp','Comp'],['pan','Balance'],['space','Reverb'],['beat','Beat']];
 // full names and level labels, copied from the Listening Lab's GAMES (keep in step with ../index.html)
 const INFO = {
-  filter:['Filter Expert', ['HPF or LPF? (mid cutoffs)', 'HPF or LPF? (subtle cutoffs)', 'Name the cutoff: 3 choices', 'Name the cutoff: 4 choices', 'Name the cutoff: 4 close choices', 'Filter type and cutoff: 6 choices', 'Name the cutoff: 6 close choices', 'Click the cutoff within ½ octave']],
-  peak:['Peak Finder', ['9 dB boost within 1 octave', '8 dB boost within ⅔ octave', '6 dB boost within ½ octave', '6 dB boost within ⅓ octave', '4 dB boost within ⅓ octave']],
+  filter:['Filter Spotter', ['HPF or LPF? (mid cutoffs)', 'HPF or LPF? (subtle cutoffs)', 'Name the cutoff: 3 choices', 'Name the cutoff: 4 choices', 'Name the cutoff: 4 close choices', 'Filter type and cutoff: 6 choices', 'Name the cutoff: 6 close choices', 'Click the cutoff within ½ octave']],
+  peak:['Boost Hunt', ['9 dB boost within 1 octave', '8 dB boost within ⅔ octave', '6 dB boost within ½ octave', '6 dB boost within ⅓ octave', '4 dB boost within ⅓ octave']],
   eq:['Boost or Cut', ['Boosted or cut? (6 dB)', 'Boost in the lows or highs?', 'Low, mid or high boost?', 'Which of four bands?', 'Which of four bands? (4 dB)']],
-  gain:['Gain Master', ['Louder or quieter? (3 dB)', 'Louder or quieter? (1.5 dB)', 'By how much? 3 choices', 'By how much? 4 choices', 'By how much? 4 small choices']],
+  gain:['Level Check', ['Louder or quieter? (3 dB)', 'Louder or quieter? (1.5 dB)', 'By how much? 3 choices', 'By how much? 4 choices', 'By how much? 4 small choices']],
   comp:['Compressor Ears', ['Compressed or not? (medium)', 'Compressed or not? (light)', 'None, light or heavy?', 'Which ratio? 4 choices', 'Which ratio? 4 close choices']],
   pan:['Balance Test', ['Left or right? (halfway)', 'Left, center or right?', 'Wide left to wide right', 'Place it within 25%', 'Place it within 12%']],
   space:['Reverb Space', ['Reverb or dry?', 'Room or hall?', 'Short, medium or long decay?', 'Which decay time? 4 choices', 'How much reverb? 4 choices']],
@@ -313,7 +313,7 @@ function renderTests(t, results) {
   const now = new Date(), local = d => new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
   $('out').innerHTML = `<div style="display:grid;gap:16px">${list}${res}
     <div class="form box"><h2 style="font-size:.95rem">New test for ${esc(c.name)}</h2>
-      <div class="row"><label class="f" style="flex:1;min-width:220px">Test name<input id="t-name" maxlength="60" placeholder="Filter Expert check-in"></label>
+      <div class="row"><label class="f" style="flex:1;min-width:220px">Test name<input id="t-name" maxlength="60" placeholder="Filter Spotter check-in"></label>
         <label class="f">Game<select id="t-game">${GAMES.map(([id]) => `<option value="${id}">${esc(INFO[id][0])}</option>`).join('')}</select></label>
         <label class="f">Level<select id="t-level"></select></label></div>
       <div class="row"><label class="f">Rounds<select id="t-rounds">${[5, 10, 15, 20].map(n => `<option${n === 10 ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
@@ -362,7 +362,7 @@ async function loadScores() {
       if (admin) world = await get(fs.query(col, fs.where('class_code', '==', ''))); }
     const newest = (a, b) => toMs(b.created_at) - toMs(a.created_at); rows.sort(newest); world.sort(newest);
     $('stats').innerHTML = [['Runs posted', rows.length], ['Players', new Set(rows.map(r => r.name)).size], ['Top score', rows.length ? Math.max(...rows.map(r => r.score)).toLocaleString() : '–']].map(([l, v]) => `<div class="stat"><span>${l}</span><b>${v}</b></div>`).join('');
-    $('out').innerHTML = `<p class="note" style="margin-bottom:10px">Every finished full game a student in this class plays (not workouts or tests). Students see the best score per game on their Leaderboard. Delete a run to take it off the board.</p>
+    $('out').innerHTML = `<p class="note" style="margin-bottom:10px">Every finished full game a student in this class plays (not daily sessions or tests). Students see the best score per game on their Leaderboard. Delete a run to take it off the board.</p>
       ${scoreTable(rows, 'No scores posted in this class yet.')}
       ${admin || (PREVIEW && world.length) ? `<h3 style="margin:22px 0 6px">World only (no class)</h3><p class="note" style="margin-bottom:10px">Admin only: scores from students who said "I'm not in a class". They show on the World board.</p>${scoreTable(world, 'No World-only scores.')}` : ''}`;
     $('out').querySelectorAll('[data-sdel]').forEach(b => b.onclick = async () => { if (!confirm('Delete this score from the leaderboard?')) return;

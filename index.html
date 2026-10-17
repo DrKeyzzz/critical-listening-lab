@@ -388,7 +388,7 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
 .ttable small{color:var(--muted)}
 .bm-save{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .bm-save input{flex:1 1 180px;min-width:0;padding:9px 12px;border-radius:8px;border:2px solid var(--line);background:#0b0b0d;color:var(--fg);font:inherit}
-/* Peak Finder how-to demo */
+/* Boost Hunt how-to demo */
 .howto{display:grid;gap:12px;border-color:var(--accent)!important;box-shadow:6px 6px 0 var(--accent)!important}
 .how-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:center}
 @media (max-width:760px){.how-grid{grid-template-columns:1fr}}
@@ -578,10 +578,10 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
     <div class="from-teacher" id="fromTeacher" hidden></div>
     <div class="home-top">
       <div class="panel workout">
-        <div class="rowsb"><span class="label">Today's workout</span><span class="status" id="woDate"></span></div>
+        <div class="rowsb"><span class="label">Today's session</span><span class="status" id="woDate"></span></div>
         <h2 id="woTitle">Three games, five rounds each</h2>
         <div class="wo-list" id="woList"></div>
-        <div><button class="btn primary big" id="woStart">Start workout</button></div>
+        <div><button class="btn primary big" id="woStart">Start session</button></div>
       </div>
       <div class="panel profile">
         <div class="rowsb"><span class="label" id="pName">Your progress</span><button class="chip" id="copyReport">Copy progress report</button></div>
@@ -640,7 +640,7 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
           <button class="btn" id="btnB" aria-pressed="false"><i class="lamp"></i><b>B</b><span>Processed</span></button>
         </div>
         <p class="hint"><kbd>Space</kbd> play/stop · <kbd>A</kbd>/<kbd>B</kbd> switch · <kbd>X</kbd> flip · <kbd>1</kbd>–<kbd>9</kbd> answer · <kbd>Enter</kbd> lock in / next</p>
-        <button class="btn" id="quit">Quit to gym</button>
+        <button class="btn" id="quit">Back to the lab</button>
       </div>
       <div class="panel">
         <div class="rowsb" style="margin-bottom:8px;gap:10px"><div class="label" id="question"></div><button class="btn small" id="howShow">What is this?</button></div>
@@ -694,7 +694,7 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
     <div class="panel" style="display:grid;gap:14px">
       <div class="play-head">
         <div style="display:grid;gap:4px"><span class="label sk-Rhythm">Rhythm · Free play</span><h2>Beat Maker</h2></div>
-        <button class="btn" id="bmBack">Back to gym</button>
+        <button class="btn" id="bmBack">Back to the lab</button>
       </div>
       <div class="bm-bar">
         <button class="btn primary big" id="bmPlay">Play</button>
@@ -764,14 +764,14 @@ kbd{background:#0f0f12;border-color:var(--line);color:var(--fg)}
       <button class="btn primary big" id="rNext">Next game</button>
       <button class="btn" id="rAgain">Play again</button>
       <button class="btn" id="rBoard">🏆 Leaderboard</button>
-      <button class="btn" id="rHome">Back to gym</button>
+      <button class="btn" id="rHome">Back to the lab</button>
     </div>
   </section>
 
   <!-- LEADERBOARD -->
   <section id="vBoard" class="view" hidden>
     <div class="panel board">
-      <div class="rowsb"><h2>🏆 Leaderboard</h2><button class="btn" id="bBack" type="button">Back to gym</button></div>
+      <div class="rowsb"><h2>🏆 Leaderboard</h2><button class="btn" id="bBack" type="button">Back to the lab</button></div>
       <div class="rowsb">
         <div class="seg" id="bScope" role="group" aria-label="Which board"><button type="button" data-s="class" aria-pressed="true">My class</button><button type="button" data-s="world" aria-pressed="false">World</button></div>
         <div class="seg" id="bWhen" role="group" aria-label="When"><button type="button" data-w="7" aria-pressed="false">This week</button><button type="button" data-w="30" aria-pressed="false">This month</button><button type="button" data-w="0" aria-pressed="true">All time</button></div>
@@ -1606,7 +1606,7 @@ const ICONS = {
 };
 // Every game climbs the same way: two choices, then subtler, then 3 splits, then 4 splits, then the hardest 4.
 const GAMES = [
-  { id:'filter', name:'Filter Expert', skill:'Frequency', icon:'filter',
+  { id:'filter', name:'Filter Spotter', skill:'Frequency', icon:'filter',
     tagline:'Spot high-pass and low-pass filters, then name the cutoff.',
     blurb:'B has a high-pass (thin, no lows) or low-pass (dull, no highs) filter at 24 dB/octave.',
     levels:['HPF or LPF? (mid cutoffs)', 'HPF or LPF? (subtle cutoffs)', 'Name the cutoff: 3 choices', 'Name the cutoff: 4 choices', 'Name the cutoff: 4 close choices', 'Filter type and cutoff: 6 choices', 'Name the cutoff: 6 close choices', 'Click the cutoff on the strip within ½ octave'],
@@ -1626,7 +1626,7 @@ const GAMES = [
       return { ...btns(sets.map(v => [String(v), `${type}\n${fmtHz(v)}`]), String(f), filterChain(hp?'highpass':'lowpass', f), `${hp?'High-pass':'Low-pass'} at ${fmtHz(f)}.`, f),
         shade:{ kind:hp?'hpf':'lpf', f }, q:`B has a ${hp?'high-pass':'low-pass'} filter. Where is the cutoff?` };
     } },
-  { id:'peak', name:'Peak Finder', skill:'Frequency', icon:'peak',
+  { id:'peak', name:'Boost Hunt', skill:'Frequency', icon:'peak',
     tagline:'A narrow boost is hiding somewhere. Click where it is.',
     blurb:'B has one bell boost. Find its frequency on the strip, then lock in. Closer guesses score more.',
     levels:['Find a 9 dB boost within 1 octave', 'Find an 8 dB boost within ⅔ octave', 'Find a 6 dB boost within ½ octave', 'Find a 6 dB boost within ⅓ octave', 'Find a 4 dB boost within ⅓ octave'],
@@ -1644,7 +1644,7 @@ const GAMES = [
       const bands = SPLITS[Math.min(L, 4)], [n,f] = pick(bands), g = [0,0,9,8,6,4][L];
       return { ...btns(bands.map(([bn,bf]) => [String(bf), `${bn}\n${fmtHz(bf)}`]), String(f), eqChain(f, g, 1), say(g, n, f), f), shade:{ kind:'boost', f } };
     } },
-  { id:'gain', name:'Gain Master', skill:'Level', icon:'gain',
+  { id:'gain', name:'Level Check', skill:'Level', icon:'gain',
     tagline:'Hear small level changes. Louder fools everyone.',
     blurb:'B is the same audio at a different level. Louder almost always sounds "better", so engineers level-match before judging.',
     levels:['Louder or quieter? (3 dB)', 'Louder or quieter? (1.5 dB)', 'By how much? 3 choices', 'By how much? 4 choices', 'By how much? 4 small choices'],
@@ -1767,8 +1767,8 @@ function renderHome() {
   $('woList').innerHTML = wo.map(id => { const g = G(id), d = done.includes(id);
     return `<div class="wo-item ${d?'done':''}"><span class="sk-${g.skill}">${svgIcon(g.icon)}</span><b>${g.name}</b><span class="check">${d?'Done':'Level ' + startLevel(id)}</span></div>`; }).join('');
   const allDone = wo.every(id => done.includes(id));
-  $('woTitle').textContent = allDone ? 'Workout complete. Nice work.' : 'Three games, five rounds each';
-  $('woStart').textContent = allDone ? 'Run it again' : done.length ? 'Continue workout' : 'Start workout';
+  $('woTitle').textContent = allDone ? 'Session complete. Nice work.' : 'Three games, five rounds each';
+  $('woStart').textContent = allDone ? 'Run it again' : done.length ? 'Continue session' : 'Start session';
   const lvl = playerLevel(P.xp), lo = levelXp(lvl), hi = levelXp(lvl + 1);
   $('pLevel').textContent = 'Level ' + lvl; $('pXp').textContent = `${P.xp} / ${hi} XP`;
   $('pBar').style.width = Math.round((P.xp - lo) / (hi - lo) * 100) + '%';
@@ -1798,7 +1798,7 @@ function startSession(gid, rounds, workout, test) {
   if (!workout && !test && g.rounds) rounds = g.rounds;
   const L0 = test ? Math.max(1, Math.min(g.levels.length, test.settings.level || 1)) : startLevel(gid);
   S = { g, rounds, i:0, score:0, right:0, results:[], level:L0, startLevel:L0, upRun:0, downRun:0, workout, test };
-  $('gName').textContent = g.name; $('gSkill').textContent = test ? `Test: ${test.name}` : g.skill + (workout ? ` · Workout ${workout.idx + 1} of 3` : '');
+  $('gName').textContent = g.name; $('gSkill').textContent = test ? `Test: ${test.name}` : g.skill + (workout ? ` · Session ${workout.idx + 1} of 3` : '');
   $('gSkill').className = 'label sk-' + g.skill;
   $('gBlurb').textContent = g.blurb; $('question').textContent = '';
   const grid = g.id === 'beat'; $('btnA').querySelector('span').textContent = grid ? 'Target beat' : 'Original'; $('btnB').querySelector('span').textContent = grid ? 'Your beat' : 'Processed';
@@ -1837,7 +1837,7 @@ function renderAnswer() {
   const place = x => { if (answered) return; x = Math.max(0, Math.min(1, x)); guess = fromX(x); mk.hidden = false; mk.style.left = toX(guess) * 100 + '%';
     ro.textContent = isF ? fmtHz(guess) : panLabel(guess); lock.disabled = false; };
   const fromEvt = e => { const r = strip.getBoundingClientRect(); place((e.clientX - r.left) / r.width); };
-  // Tune mode (Peak Finder): hold Shift, or switch on the Tune button, and the boost follows the cursor.
+  // Tune mode (Boost Hunt): hold Shift, or switch on the Tune button, and the boost follows the cursor.
   // Levels 1-2 can tune any time; higher levels only after answering.
   const canTune = () => isF && R.gain && (R.tune || answered);
   let tuneOn = false;
@@ -1944,7 +1944,7 @@ $('bmHow').onclick = () => LN.open('maker', false);
 // Before a game the first time (and from "What is this?"): 1 the idea (a picture and a short lesson),
 // 2 hear it (labeled examples on the current source, played through the game's own effect chains), 3 how to play (the HOWTO demo).
 const LEARN = {
-  filter:{ name:'Filter Expert', skill:'Frequency', color:'--freq', viz:'freq',
+  filter:{ name:'Filter Spotter', skill:'Frequency', color:'--freq', viz:'freq',
     job:'B has a filter on it. Is it a high-pass or a low-pass, and where does it start cutting?',
     idea:[
       '<b>Frequency</b> is how low or high a sound is, measured in <b>Hertz (Hz)</b>. Every song is a mix of lows, mids and highs, all at once.',
@@ -1963,7 +1963,7 @@ const LEARN = {
       { l:'Sweep HPF ↑', h:'Watch and listen', fx:{ t:'hp', f:60, sweep:[40, 4000] }, say:'The high-pass cutoff is <em>moving up</em>. Hear more and more of the bottom disappear.' },
       { l:'Sweep LPF ↓', h:'Watch and listen', fx:{ t:'lp', f:16000, sweep:[16000, 300] }, say:'The low-pass cutoff is <em>moving down</em>. Hear the top get darker and darker.' }], },
 
-  peak:{ name:'Peak Finder', skill:'Frequency', color:'--freq', viz:'freq',
+  peak:{ name:'Boost Hunt', skill:'Frequency', color:'--freq', viz:'freq',
     job:'B has one narrow boost hiding in it. Find the frequency it is at.',
     idea:[
       'An <b>EQ</b> (equalizer) turns up or down <b>one range of frequencies</b>. Think of it as a volume knob for just part of the sound.',
@@ -1984,7 +1984,7 @@ const LEARN = {
   eq:{ name:'Boost or Cut', skill:'Frequency', color:'--freq', viz:'freq',
     job:'One range of frequencies on B was turned up or turned down. Which one, and where?',
     idea:[
-      'This uses the same <b>bell EQ</b> as Peak Finder, but this time it can go <b>up or down</b>.',
+      'This uses the same <b>bell EQ</b> as Boost Hunt, but this time it can go <b>up or down</b>.',
       'A <b>boost</b> is a hill: that range <b>sticks out</b> and gets louder.',
       'A <b>cut</b> is a valley: that range <b>drops out</b> and leaves a hole. Cuts are harder to hear because you are listening for something that is missing.',
       'Where it happens changes the feel. <b>Lows</b> (around 100 Hz) are warmth and boom. <b>Mids</b> (around 1 kHz) are body and presence. <b>Highs</b> (around 6 to 8 kHz) are air and sparkle.',
@@ -2000,7 +2000,7 @@ const LEARN = {
       { l:'Boost highs', h:'Brighter', fx:{ t:'bell', f:7000, g:6, q:1.4 }, say:'+6 dB in the highs: <em>brighter</em>, more sizzle.' },
       { l:'Cut highs', h:'Darker', fx:{ t:'bell', f:7000, g:-6, q:1.4 }, say:'−6 dB in the highs: <em>darker</em>, a little dull.' }], },
 
-  gain:{ name:'Gain Master', skill:'Level', color:'--level', viz:'gain',
+  gain:{ name:'Level Check', skill:'Level', color:'--level', viz:'gain',
     job:'B is the exact same music at a different volume. Louder or quieter, and by how much?',
     idea:[
       '<b>Gain</b> means level, or volume. It is measured in <b>decibels (dB)</b>.',
@@ -2478,7 +2478,7 @@ function finish() {
   if (S.workout) { const d = P.workout[today()] ||= []; if (!d.includes(g.id)) d.push(g.id); }
   save();
   const acc = Math.round(S.right / S.rounds * 100);
-  $('rGame').textContent = g.name + (S.workout ? ` · Workout ${S.workout.idx + 1} of 3` : '');
+  $('rGame').textContent = g.name + (S.workout ? ` · Session ${S.workout.idx + 1} of 3` : '');
   $('rTitle').textContent = acc >= 80 ? 'Golden ears.' : acc >= 50 ? 'Solid session.' : 'Keep at it.';
   $('rScore').textContent = S.score; $('rAcc').textContent = acc + '%'; $('rLevel').textContent = S.level; $('rXp').textContent = '+' + xp;
   $('rNote').textContent = S.level > S.startLevel ? `You moved up from level ${S.startLevel} to ${S.level}.` : S.level < S.startLevel ? `Level dropped to ${S.level}. It goes back up after three in a row.` : `You stayed at level ${S.level}. ${S.workout ? 'Two' : 'Three'} correct in a row moves you up.`;
@@ -2912,7 +2912,7 @@ function testLobby(t, note) {
     <div class="facts"><div class="fact"><span>Student</span><b>${esc(displayName(P))}</b></div><div class="fact"><span>Tries</span><b>${t.tries ? used + ' / ' + t.tries : used + ' used'}</b></div>
       <div class="fact"><span>Your best</span><b>${used ? r.best + unitOf(t) : '–'}</b></div><div class="fact"><span>Graded on</span><b>${t.grade === 'score' ? 'Score' : 'Accuracy'}</b></div></div>
     ${note ? `<p class="err" role="alert">${esc(note)}</p>` : ''}${blocked ? `<p class="err">${esc(blocked)}</p>` : '<p class="note">A try counts as soon as you begin. Leaving partway still uses it.</p>'}
-    <div class="row">${blocked ? '' : `<button class="btn primary big" id="tGo">${used ? 'Begin another try' : 'Begin the test'}</button>`}<button class="btn" id="tBack">Back to gym</button></div>`;
+    <div class="row">${blocked ? '' : `<button class="btn primary big" id="tGo">${used ? 'Begin another try' : 'Begin the test'}</button>`}<button class="btn" id="tBack">Back to the lab</button></div>`;
   show('vTest');
   $('tBack').onclick = () => renderHome();
   if ($('tGo')) $('tGo').onclick = () => beginTest(t);
@@ -2987,7 +2987,7 @@ function renderBoard() {
   $('bNote').textContent = shown.length ? `${world ? 'World' : P.className || 'Your class'} · ${B.when ? 'last ' + (B.when === 7 ? 'week' : 'month') : 'all time'} · best score in each game. Click a column to sort by that game.` : '';
   $('bOut').innerHTML = shown.length ? `<table><thead><tr><th class="l">#</th><th class="l">Player</th>${th('total', 'Total')}${th('games', 'Games')}${GAMES.map(g => th(g.id, SHORT[g.id])).join('')}</tr></thead><tbody>${shown.map((p, i) => `<tr class="${p.key === me ? 'me' : ''}"><td class="l rk">${i + 1}</td><td class="l"><b>${esc(p.name)}</b>${world && p.code ? ` <small class="dim">${esc(p.code)}</small>` : ''}</td>
       <td class="${B.sort === 'total' ? 'on' : ''}">${p.total.toLocaleString()}</td><td class="${B.sort === 'games' ? 'on' : ''}">${p.games}</td>${GAMES.map(g => { const b = p.best[g.id]; return `<td class="${B.sort === g.id ? 'on' : ''} ${b ? '' : 'dim'}" title="${b ? `Level ${b.level}, ${b.acc}% correct` : ''}">${b ? b.score.toLocaleString() : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`
-    : `<p class="note" style="padding:16px;margin:0">No scores ${B.when ? 'in this period ' : ''}yet${B.sort !== 'total' && B.sort !== 'games' ? ' for ' + G(B.sort).name : ''}. Finish a full game (not the workout) to post one.</p>`;
+    : `<p class="note" style="padding:16px;margin:0">No scores ${B.when ? 'in this period ' : ''}yet${B.sort !== 'total' && B.sort !== 'games' ? ' for ' + G(B.sort).name : ''}. Finish a full game (not today's session) to post one.</p>`;
   $('bOut').querySelectorAll('th[data-k]').forEach(h => h.onclick = () => { B.sort = h.dataset.k; renderBoard(); });
 }
 $('boardBtn').onclick = $('rBoard').onclick = () => { stop(); openBoard(); };
