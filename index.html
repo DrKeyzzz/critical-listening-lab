@@ -3061,10 +3061,11 @@ async function postScore(acc) {
   if (S.test || S.workout || P.guest || !signedIn() || S.rounds !== (S.g.rounds || 10)) return;
   const doc = { name: displayName(P).slice(0, 24), class_code: P.code && P.owner ? P.code : '', game: S.g.id, score: Math.min(100000, S.score), acc, level: S.level, rounds: S.rounds };
   try { const { fs, db } = await withTimeout(fb()); await withTimeout(fs.addDoc(fs.collection(db, 'listening_scores'), { ...doc, created_at: fs.serverTimestamp() }));
+    for (const [k, c] of Object.entries(B.cache)) if (k === 'world:' || k === 'class:' + doc.class_code) c.rows.push({ ...doc, created_at: new Date() });   // show it on cached boards
     const n = $('rNote'); if (n && !$('vResults').hidden) n.textContent += ` Score posted to the ${doc.class_code ? 'class and World leaderboards' : 'World leaderboard'}.`; }
   catch (e) { /* offline: the score just isn't posted */ }
 }
-const B = { scope:'class', when:0, sort:'total', rows:null, key:'' };
+const B = { scope:'class', when:0, sort:'total', rows:null, key:'', cache:{} };
 function openBoard() {
   const inClass = !!(signedIn() && !P.guest && P.code && P.owner);
   const cb = $('bScope').querySelector('[data-s=class]'); cb.disabled = !inClass; if (!inClass) B.scope = 'world';
@@ -3075,9 +3076,11 @@ function openBoard() {
 async function loadBoard() {
   const key = B.scope + ':' + (B.scope === 'class' ? P.code : '');
   $('bNote').textContent = 'Loading…'; if (B.key !== key) $('bOut').innerHTML = '';
+  const hit = B.cache[key];   // kept 5 minutes, so switching Class/World or reopening the board costs no reads
+  if (hit && Date.now() - hit.t < 300000) { B.rows = hit.rows; B.key = key; return renderBoard(); }
   try { const { fs, db } = await withTimeout(fb()), col = fs.collection(db, 'listening_scores');
     const q = B.scope === 'class' ? fs.query(col, fs.where('class_code', '==', P.code)) : fs.query(col, fs.orderBy('score', 'desc'), fs.limit(1500));
-    B.rows = (await withTimeout(fs.getDocs(q))).docs.map(d => d.data()); B.key = key; renderBoard(); }
+    B.rows = (await withTimeout(fs.getDocs(q))).docs.map(d => d.data()); B.key = key; B.cache[key] = { t: Date.now(), rows: B.rows }; renderBoard(); }
   catch (e) { $('bNote').textContent = "Couldn't load the leaderboard. Check your internet and try again."; }
 }
 function renderBoard() {
