@@ -2562,6 +2562,7 @@ function submit(resp) {
   const pts = Math.round(100 * (1 + 0.25 * (S.level - 1)) * acc) + bonus;
   S.score += pts; if (ok) S.right++; S.results.push(ok);
   dayStat(st => { st.rounds++; if (ok) st.correct++; st.r ||= {}; st.r[S.g.id] = (st.r[S.g.id] || 0) + 1; });
+  histNote(S.g.name, ok);
   P.total++; if (ok) P.right++;
   let lvlMsg = '';
   // Two in a row moves you up during short workout sets and on levels you've already passed; otherwise three.
@@ -2936,6 +2937,23 @@ async function syncUp(force) {
   catch (e) { /* offline or blocked: try again next minute */ }
 }
 // per-day counters the dashboard shows
+// The hub's shared practice history (localStorage mtg_hist_v1:<first+initial>, same shape as the games' MTG_HIST snippet), under the game id
+// 'listen' with each game's name as the skill, so home-page assignments ("From your teacher") and the practice time box count the lab.
+// This app keeps its own sign-in; the history goes to the home page's signed-in student if there is one, else to this app's name.
+function histNote(label, ok) {
+  if (!signedIn() || P.guest || !P.first || !P.init) return;
+  let hub = null; try { if (sessionStorage.getItem('music_guest') !== '1') hub = JSON.parse(localStorage.getItem('rdt_profile_v1') || 'null'); } catch (e) {}
+  const u = hub && hub.first && hub.init ? hub : P;   // the home page's sign-in when there is one, so its assignments count this practice
+  const k = 'mtg_hist_v1:' + (u.first + u.init).toLowerCase().replace(/[^a-z]/g, ''), now = Date.now();
+  let h = null; try { h = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) {}
+  if (!h || !h.days) h = { v: 1, days: {} };
+  h.name = h.name || displayName(P);
+  const d = h.days[today()] ||= {}, g = d.listen ||= { plays: 0, answers: 0, correct: 0, ms: 0, best: 0, level: 0, skills: {}, last: 0 };
+  if (g.last && now - g.last < 600000) g.ms += now - g.last;   // gaps over 10 minutes aren't practice time
+  g.last = now; g.answers++; if (ok) g.correct++;
+  const sk = g.skills[label] ||= [0, 0]; sk[1]++; if (ok) sk[0]++;
+  try { localStorage.setItem(k, JSON.stringify(h)); } catch (e) {}
+}
 function dayStat(fn) { P.stats ||= {}; const s = P.stats[today()] ||= { rounds:0, correct:0, sessions:0, games:{}, first: Date.now() }; fn(s); }
 document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) { save(); syncUp(true); } });
 $('teachBtn').onclick = $('teachBtn2').onclick = () => { save(); location.href = TEACHER_URL; };
@@ -3195,5 +3213,97 @@ draw();
 })();
 </script>
 
+<!-- MTG_ASSIGN start: identical in every game, only data-game changes. Master copy: Music Games/shared/mtg-assign.snippet.html (install with shared/apply-assign.py). -->
+<!-- "Assignment complete": when a signed-in student reaches the goal of their teacher's assignment in this game, a card pops up
+     (Back to home / Keep practicing), so nobody does 80 when 40 was asked. It counts exactly like the home page's "From your teacher"
+     card: the assignment cached by the home page (localStorage mtg_assign_v1:<sid>) and the practice history (mtg_hist_v1:<sid>),
+     answers (or minutes) in this game from the assignment's start to end day. It shows once per assignment task, and only when the
+     goal is reached while this page is open. No Firestore reads. -->
+<style>
+  #mtg-asg-done { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; padding: 16px; background: rgba(4, 8, 18, .72); backdrop-filter: blur(3px); font: 16px/1.4 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  #mtg-asg-done .card { max-width: 420px; width: 100%; text-align: center; background: #101a33; color: #f2f5ff; border: 2px solid #2fbf71; border-radius: 20px; padding: 26px 22px 20px; box-shadow: 0 0 0 6px rgba(47, 191, 113, .15), 0 20px 60px rgba(0, 0, 0, .5); animation: mtgAsgPop .45s cubic-bezier(.2, 1.5, .4, 1) both; }
+  #mtg-asg-done .big { font-size: 46px; line-height: 1; }
+  #mtg-asg-done h2 { margin: 10px 0 6px; font-size: 24px; }
+  #mtg-asg-done p { margin: 0 0 18px; color: #c7d2ee; }
+  #mtg-asg-done .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  #mtg-asg-done a, #mtg-asg-done button { font: 700 15px/1 inherit; font-family: inherit; padding: 12px 18px; border-radius: 999px; cursor: pointer; text-decoration: none; }
+  #mtg-asg-done a { background: #2fbf71; color: #06210f; border: 0; }
+  #mtg-asg-done button { background: transparent; color: #f2f5ff; border: 1px solid #3a4a78; }
+  @keyframes mtgAsgPop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #mtg-asg-done .card { animation: none; } }
+</style>
+<script id="mtg-assign" data-game="listen">
+(function () {
+  var GAME = document.currentScript.getAttribute('data-game'), HOME = 'https://drkeyzzz.github.io/';
+  var NAMES = { scale: 'Scale Quest', tidal: 'Tidal Tones', rooftop: 'Rooftop Runner', rhythm: 'The Big Score', earshot: 'Earshot Saloon', brainwaves: 'Brainwaves', listen: 'Critical Listening Lab' };
+  // Brainwaves saves each brain area under its own id; it counts as one game, and its skills are the area names (like the home page's foldBrainwaves)
+  var BW = { synapse: 'Sharp or Flat?', intervals: 'Intervals', chords: 'Chord Colors', progressions: 'Progressions', scales: 'Scales and modes', voice: 'Pick a Voice', tuner: 'Tuner' };
+  function gameDay(day) {
+    if (GAME !== 'brainwaves') return day[GAME];
+    var b = null;
+    Object.keys(BW).forEach(function (id) {
+      var x = day[id]; if (!x) return; b = b || { answers: 0, ms: 0, skills: {} };
+      b.answers += x.answers || 0; b.ms += x.ms || 0; b.skills[BW[id]] = [x.correct || 0, x.answers || 0];
+    });
+    return b;
+  }
+  function load(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function prof() { try { if (sessionStorage.getItem('music_guest') === '1') return null; } catch (e) {} var p = load('rdt_profile_v1'); return p && p.first && p.init ? p : null; }
+  function sidOf(p) { return (p.first + p.init).toLowerCase().replace(/[^a-z]/g, ''); }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function skills(t) { return t.skills && t.skills.length ? t.skills : t.skill ? [t.skill] : []; }
+  // the same count as the home page's assignDone(), for this game only
+  function count(days, a, t) {
+    var n = 0, sk = skills(t);
+    Object.keys(days).forEach(function (d) {
+      if (d < a.start || d > a.end) return;
+      var g = gameDay(days[d]); if (!g) return;
+      if (t.unit === 'minutes') n += g.ms || 0;
+      else if (sk.length) sk.forEach(function (k) { n += ((g.skills || {})[k] || [0, 0])[1]; });
+      else n += g.answers || 0;
+    });
+    return t.unit === 'minutes' ? Math.floor(n / 60000) : n;
+  }
+  // every task for this game in the student's classes that is open today: [{key, t, a, n}]
+  function tasks() {
+    var p = prof(); if (!p) return [];
+    var sid = sidOf(p), by = load('mtg_assign_v1:' + sid) || {}, h = load('mtg_hist_v1:' + sid), days = h && h.days ? h.days : {}, d = today(), out = [];
+    Object.keys(by).forEach(function (code) {
+      var a = by[code]; if (!a || !Array.isArray(a.tasks) || a.start > d || a.end < d) return;
+      a.tasks.forEach(function (t, i) {
+        if (!t || t.game !== GAME || !(Number(t.goal) > 0)) return;
+        out.push({ key: sid + '|' + code + '|' + a.start + '|' + a.end + '|' + i + '|' + t.goal, t: t, a: a, n: count(days, a, t) });
+      });
+    });
+    return out;
+  }
+  var below = {}, shown = {};
+  function show(x) {
+    if (document.getElementById('mtg-asg-done')) return;
+    var t = x.t, keys = t.settings && Array.isArray(t.settings.keys) ? t.settings.keys.slice(0, 6).join(', ') : skills(t).join(', ');
+    var what = (NAMES[GAME] || 'this game') + (keys ? ': ' + keys : ''), unit = t.unit === 'minutes' ? 'minutes' : 'answers';
+    var el = document.createElement('div'); el.id = 'mtg-asg-done'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'mtg-asg-h');
+    el.innerHTML = '<div class="card"><div class="big" aria-hidden="true">✅</div><h2 id="mtg-asg-h">Assignment complete!</h2>'
+      + '<p>You did ' + Math.min(x.n, 9999) + ' of ' + t.goal + ' ' + unit + ' in ' + what.replace(/[<>&]/g, '') + '. Your teacher can see it.</p>'
+      + '<div class="row"><a href="' + HOME + '">Back to home</a><button type="button">Keep practicing</button></div></div>';
+    var close = function () { el.remove(); removeEventListener('keydown', keys2, true); };
+    var keys2 = function (e) { if (e.key === 'Escape') { e.preventDefault(); close(); } else if (e.key !== 'Tab' && e.key !== 'Enter' && e.key !== ' ') { e.stopPropagation(); e.preventDefault(); } };
+    el.querySelector('button').onclick = close;
+    addEventListener('keydown', keys2, true);   // the game underneath doesn't get the keys while the card is up
+    document.body.appendChild(el); el.querySelector('a').focus();
+  }
+  function check() {
+    tasks().forEach(function (x) {
+      if (shown[x.key]) return;
+      if (x.n < x.t.goal) { below[x.key] = true; return; }
+      shown[x.key] = true;
+      if (below[x.key]) show(x);   // reached while this page was open (not an assignment finished earlier)
+    });
+  }
+  check(); setInterval(check, 1500);
+})();
+</script>
+<!-- MTG_ASSIGN end -->
 </body>
 </html>
