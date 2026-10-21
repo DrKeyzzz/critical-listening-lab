@@ -6,6 +6,7 @@ rules_version = '2';
 //   Tidal Tones               https://drkeyzzz.github.io/tidal-tones/
 //   Rooftop Runner            https://drkeyzzz.github.io/rooftop-runner/
 //   Earshot Saloon            https://drkeyzzz.github.io/earshot-saloon/
+//   Brainwaves                https://drkeyzzz.github.io/brainwaves/
 //   Critical Listening Lab    https://drkeyzzz.github.io/critical-listening-lab/
 //   Home page                 https://drkeyzzz.github.io/  (teacher/ sets each class's hub_assignment)
 // All the games share this project, its classes and teacher sign-in.
@@ -93,7 +94,7 @@ service cloud.firestore {
 
       allow create: if isTeacher()
         && code.matches('^[A-Z0-9]{4,7}$')   // random 5-character codes, or a teacher's own 4–7 character code
-        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'listen_assignment'])
+        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'listen_assignment'])
         && request.resource.data.ownerEmail == request.auth.token.email
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
@@ -101,7 +102,7 @@ service cloud.firestore {
 
       allow update: if isTeacher()
         && resource.data.ownerEmail == request.auth.token.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'listen_assignment'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'listen_assignment'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40;
 
@@ -171,6 +172,14 @@ service cloud.firestore {
 
     // Scale Quest SCALE DEGREES CHAOS runs: same shape as scale_scores, on their own board.
     match /degree_scores/{scoreId} {
+      allow read: if true;
+      allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    // Scale Quest KEY SIGNATURES CHAOS runs: same shape as scale_scores, on their own board.
+    match /key_scores/{scoreId} {
       allow read: if true;
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if false;
@@ -272,6 +281,29 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isTeacher() && resource.data.owner == request.auth.token.email);
     }
 
+    // Brainwaves (https://drkeyzzz.github.io/brainwaves/): one practice summary per student per class per day,
+    // every brain area together, plus by_area { <area id>: [right, answers] }. Students write their own; only the teacher (or the admin) reads it.
+    match /brainwaves_progress/{docId} {
+      allow read: if isAdmin() || (isTeacher() && resource.data.owner == request.auth.token.email);
+
+      allow create, update: if request.resource.data.keys().hasOnly(['class_code', 'owner', 'date', 'sid', 'student', 'answers', 'correct', 'minutes', 'first_at', 'last_at', 'by_area', 'updated_at'])
+        && request.resource.data.class_code is string
+        && exists(/databases/$(database)/documents/classes/$(request.resource.data.class_code))
+        && get(/databases/$(database)/documents/classes/$(request.resource.data.class_code)).data.ownerEmail == request.resource.data.owner
+        && docId == request.resource.data.class_code + '_' + request.resource.data.date + '_' + request.resource.data.sid
+        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.sid.matches('^[a-z]{2,16}$')
+        && request.resource.data.student is string && request.resource.data.student.size() <= 24
+        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && request.resource.data.answers is int && request.resource.data.answers >= 0 && request.resource.data.answers <= 20000
+        && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.answers
+        && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
+        && request.resource.data.by_area is map && request.resource.data.by_area.keys().hasOnly(['synapse', 'intervals', 'chords', 'progressions', 'scales', 'voice', 'tuner'])
+        && request.resource.data.updated_at == request.time;
+
+      allow delete: if isAdmin() || (isTeacher() && resource.data.owner == request.auth.token.email);
+    }
+
     // Critical Listening Lab (https://drkeyzzz.github.io/critical-listening-lab/): one summary per student
     // per day. Students write their own; only the class's teacher (or the admin) can read it.
     match /listening_progress/{docId} {
@@ -309,7 +341,7 @@ service cloud.firestore {
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
         && d.get('class_code', '') is string
         && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
-        && d.game in ['filter', 'peak', 'eq', 'gain', 'comp', 'pan', 'space', 'beat']
+        && d.game in ['filter', 'peak', 'eq', 'gain', 'comp', 'pan', 'space', 'tone', 'beat']
         && d.score is int && d.score >= 0 && d.score <= 100000
         && d.acc is int && d.acc >= 0 && d.acc <= 100
         && d.level is int && d.level >= 1 && d.level <= 20
@@ -378,6 +410,139 @@ service cloud.firestore {
         && d.style in ['midi', 'keys', 'rhythm', 'live']
         && d.clef in ['treble', 'bass', 'alto', 'treble8', 'none']
         && d.get('instrument', '') is string && d.get('instrument', '').size() <= 24
+        && d.created_at == request.time;
+    }
+
+    // ================= Brainwaves progress (Synapse, Intervals, Pick a Voice) =================
+    // Which levels a student has finished, so their progress follows them to any computer. Document ID = class code (or 'none') + '_' + first name and initial.
+    match /earbrain_progress/{docId} {
+      allow read: if true;
+      allow create, update: if docId.size() <= 60 && earbrainProgress(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    function earbrainProgress(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'synapse', 'intervals', 'voice', 'chords', 'progressions', 'scales', 'updated_at'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.class_code is string && d.class_code.size() <= 12
+        && d.synapse is list && d.synapse.size() <= 12
+        && d.get('intervals', []) is list && d.get('intervals', []).size() <= 12
+        && d.get('voice', []) is list && d.get('voice', []).size() <= 12
+        && d.get('chords', []) is list && d.get('chords', []).size() <= 12
+        && d.get('progressions', []) is list && d.get('progressions', []).size() <= 12
+        && d.get('scales', []) is list && d.get('scales', []).size() <= 12
+        && d.updated_at == request.time;
+    }
+
+    // ================= Synapse =================
+    // Leaderboard runs: anyone can see them and add one in the right shape; nobody can edit them.
+    match /synapse_scores/{scoreId} {
+      allow read: if true;
+      allow create: if synapseScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    // A finished run: score (speed and floor weighted), rounds played, deepest floor (1-6), accuracy %, tightest cents x10, best streak.
+    function synapseScore(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'score', 'rounds', 'floor', 'acc', 'tight', 'streak', 'created_at', 'dev', 'icon', 'class_codes'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.get('class_code', '') is string
+        && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
+        && d.score is int && d.score >= 0 && d.score <= 100000000
+        && d.rounds is int && d.rounds >= 1 && d.rounds <= 10000
+        && d.floor is int && d.floor >= 1 && d.floor <= 6
+        && d.acc is int && d.acc >= 0 && d.acc <= 100
+        && d.tight is int && d.tight >= 10 && d.tight <= 600
+        && d.streak is int && d.streak >= 0 && d.streak <= 10000
+        && d.created_at == request.time;
+    }
+
+    // ================= Brainwaves: Intervals =================
+    match /intervals_scores/{scoreId} {
+      allow read: if true;
+      allow create: if intervalsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    // A finished run: score, rounds played, deepest level (1-6), accuracy %, best streak.
+    function intervalsScore(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'score', 'rounds', 'floor', 'acc', 'streak', 'created_at', 'dev', 'icon', 'class_codes'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.get('class_code', '') is string
+        && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
+        && d.score is int && d.score >= 0 && d.score <= 100000000
+        && d.rounds is int && d.rounds >= 1 && d.rounds <= 10000
+        && d.floor is int && d.floor >= 1 && d.floor <= 6
+        && d.acc is int && d.acc >= 0 && d.acc <= 100
+        && d.streak is int && d.streak >= 0 && d.streak <= 10000
+        && d.created_at == request.time;
+    }
+
+    // ================= Brainwaves: Chord Colors =================
+    match /chords_scores/{scoreId} {
+      allow read: if true;
+      allow create: if chordsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    // A finished run: score, rounds played, deepest level (1-8), accuracy %, best streak.
+    function chordsScore(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'score', 'rounds', 'floor', 'acc', 'streak', 'created_at', 'dev', 'icon', 'class_codes'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.get('class_code', '') is string
+        && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
+        && d.score is int && d.score >= 0 && d.score <= 100000000
+        && d.rounds is int && d.rounds >= 1 && d.rounds <= 10000
+        && d.floor is int && d.floor >= 1 && d.floor <= 8
+        && d.acc is int && d.acc >= 0 && d.acc <= 100
+        && d.streak is int && d.streak >= 0 && d.streak <= 10000
+        && d.created_at == request.time;
+    }
+
+    // ================= Brainwaves: Progressions =================
+    match /progressions_scores/{scoreId} {
+      allow read: if true;
+      allow create: if progressionsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    // A finished run: score, rounds played, deepest level (1-8), accuracy %, best streak.
+    function progressionsScore(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'score', 'rounds', 'floor', 'acc', 'streak', 'created_at', 'dev', 'icon', 'class_codes'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.get('class_code', '') is string
+        && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
+        && d.score is int && d.score >= 0 && d.score <= 100000000
+        && d.rounds is int && d.rounds >= 1 && d.rounds <= 10000
+        && d.floor is int && d.floor >= 1 && d.floor <= 8
+        && d.acc is int && d.acc >= 0 && d.acc <= 100
+        && d.streak is int && d.streak >= 0 && d.streak <= 10000
+        && d.created_at == request.time;
+    }
+
+    // ================= Brainwaves: Scales and modes =================
+    match /scales_scores/{scoreId} {
+      allow read: if true;
+      allow create: if scalesScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    // A finished run: score, rounds played, deepest level (1-8), accuracy %, best streak.
+    function scalesScore(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'score', 'rounds', 'floor', 'acc', 'streak', 'created_at', 'dev', 'icon', 'class_codes'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.get('class_code', '') is string
+        && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
+        && d.score is int && d.score >= 0 && d.score <= 100000000
+        && d.rounds is int && d.rounds >= 1 && d.rounds <= 10000
+        && d.floor is int && d.floor >= 1 && d.floor <= 8
+        && d.acc is int && d.acc >= 0 && d.acc <= 100
+        && d.streak is int && d.streak >= 0 && d.streak <= 10000
         && d.created_at == request.time;
     }
 
@@ -455,7 +620,7 @@ service cloud.firestore {
 
     function feedbackOk(d) {
       return d.keys().hasOnly(['game', 'text', 'name', 'class_code', 'class_codes', 'owner', 'created_at'])
-        && d.game in ['scale-quest', 'tidal-tones', 'earshot-saloon', 'rhythm-trainer', 'rooftop-runner', 'hub', 'critical-listening-lab']
+        && d.game in ['scale-quest', 'tidal-tones', 'earshot-saloon', 'rhythm-trainer', 'rooftop-runner', 'ear-brain', 'hub', 'critical-listening-lab']
         && d.text is string && d.text.size() >= 3 && d.text.size() <= 300
         && d.name is string && d.name.size() <= 24
         && (isAdmin() || !d.name.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
@@ -465,6 +630,148 @@ service cloud.firestore {
           : (exists(/databases/$(database)/documents/classes/$(d.class_code))
              && get(/databases/$(database)/documents/classes/$(d.class_code)).data.ownerEmail == d.owner))
         && d.created_at == request.time;
+    }
+
+
+    // ================= Practice time (added 2026-10-16) =================
+    // One document per student per class: practice_time/<class code or 'none'>_<sid>. The shared Practice time box in every
+    // game adds the student's new whole minutes at most once a minute, at most 30 minutes per write. Anyone can read it (it's
+    // the Practice Time leaderboard). total_min only goes up, by 0–30 per write; week_min and day_min go up by 0–30, or start
+    // over (at most 30) when the week or day changes. Only the admin or the class's teacher can delete one.
+    match /practice_time/{docId} {
+      allow read: if true;
+      allow create: if practiceOk(docId, request.resource.data)
+        && request.resource.data.total_min <= 30
+        && request.resource.data.week_min <= 30 && request.resource.data.day_min <= 30;
+      allow update: if practiceOk(docId, request.resource.data)
+        && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
+        && request.resource.data.total_min >= resource.data.total_min
+        && request.resource.data.total_min <= resource.data.total_min + 30
+        && periodOk(request.resource.data.week, request.resource.data.week_min, resource.data.week, resource.data.week_min)
+        && periodOk(request.resource.data.day, request.resource.data.day_min, resource.data.day, resource.data.day_min);
+      allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
+    }
+
+    function practiceOk(docId, d) {
+      return d.keys().hasOnly(['name', 'sid', 'class_code', 'total_min', 'week', 'week_min', 'day', 'day_min', 'updated_at'])
+        && d.keys().hasAll(['name', 'sid', 'class_code', 'total_min', 'week', 'week_min', 'day', 'day_min', 'updated_at'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 24
+        && (isAdmin() || !d.name.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
+        && d.class_code is string
+        && ((d.class_code == '' && docId == 'none_' + d.sid)
+            || (d.class_code != '' && docId == d.class_code + '_' + d.sid
+                && exists(/databases/$(database)/documents/classes/$(d.class_code))))
+        && d.total_min is int && d.total_min >= 0
+        && d.week is string && d.week.matches('^[0-9]{4}-W[0-9]{2}$')
+        && d.week_min is int && d.week_min >= 0 && d.week_min <= 10080
+        && d.day is string && d.day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.day_min is int && d.day_min >= 0 && d.day_min <= 1440
+        && d.updated_at == request.time;
+    }
+    // a week or day total: the same period goes up by 0–30; a new period starts over at 0–30
+    function periodOk(p, n, oldP, oldN) {
+      return (p == oldP && n >= oldN && n <= oldN + 30) || (p != oldP && n <= 30);
+    }
+
+
+    // ================= Teacher messages (added 2026-10-18) =================
+    // One private conversation per teacher with the admin. teacher_threads/<teacher's email> is the summary (last line,
+    // unread counts); its messages subcollection holds the messages. Only the admin and that teacher can read them.
+    // Each side writes only its own side: a teacher sends as 'teacher' (unread_admin goes up by 1) and clears its own
+    // unread_teacher; the admin is the mirror image. Only the admin can delete a message or a whole conversation.
+    function isThreadTeacher(email) {
+      return isTeacher() && request.auth.token.email == email;
+    }
+    function threadOk(email, d) {
+      return d.keys().hasOnly(['email', 'name', 'school', 'last_at', 'last_text', 'last_from', 'unread_admin', 'unread_teacher'])
+        && d.keys().hasAll(['email', 'name', 'school', 'last_at', 'last_text', 'last_from', 'unread_admin', 'unread_teacher'])
+        && d.email == email
+        && d.name is string && d.name.size() <= 60 && d.school is string && d.school.size() <= 80
+        && d.last_at is timestamp && d.last_text is string && d.last_text.size() <= 120
+        && d.last_from in ['admin', 'teacher']
+        && d.unread_admin is int && d.unread_admin >= 0 && d.unread_admin <= 999
+        && d.unread_teacher is int && d.unread_teacher >= 0 && d.unread_teacher <= 999;
+    }
+    // What one side (me = 'admin' or 'teacher') may change: its own unread count only drops to 0; the other side's count
+    // stays or goes up by 1, and only together with a new last line (last_at = now, last_from = me). The admin may also
+    // change last_text alone (after deleting a message).
+    function threadSide(n, o, me, mine, theirs) {
+      return (n[mine] == o[mine] || n[mine] == 0)
+        && (n[theirs] == o[theirs] || (n[theirs] == o[theirs] + 1 && n.last_at == request.time))
+        && (n.last_at == o.last_at || (n.last_at == request.time && n.last_from == me))
+        && (n.last_from == o.last_from || n.last_from == me)
+        && (n.last_text == o.last_text || n.last_at == request.time || me == 'admin');
+    }
+    match /teacher_threads/{email} {
+      allow read: if isAdmin() || isThreadTeacher(email);
+      allow create: if threadOk(email, request.resource.data) && request.resource.data.last_at == request.time
+        && ((isAdmin() && request.resource.data.last_from == 'admin'
+              && request.resource.data.unread_admin == 0 && request.resource.data.unread_teacher <= 1)
+          || (isThreadTeacher(email) && request.resource.data.last_from == 'teacher'
+              && request.resource.data.unread_teacher == 0 && request.resource.data.unread_admin <= 1));
+      allow update: if threadOk(email, request.resource.data)
+        && ((isAdmin() && threadSide(request.resource.data, resource.data, 'admin', 'unread_admin', 'unread_teacher'))
+          || (isThreadTeacher(email) && threadSide(request.resource.data, resource.data, 'teacher', 'unread_teacher', 'unread_admin')));
+      allow delete: if isAdmin();
+
+      match /messages/{msgId} {
+        allow read: if isAdmin() || isThreadTeacher(email);
+        allow create: if request.resource.data.keys().hasOnly(['from', 'text', 'at'])
+          && request.resource.data.keys().hasAll(['from', 'text', 'at'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 1000
+          && request.resource.data.at == request.time
+          && ((request.resource.data.from == 'admin' && isAdmin())
+            || (request.resource.data.from == 'teacher' && isThreadTeacher(email)));
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+
+    // ================= Teacher Board (added 2026-10-18) =================
+    // Every approved teacher (and the admin) can read and post. Posts and replies are plain text, 1-1000 characters,
+    // signed with the poster's own email. Only the admin can pin a post or make it an announcement. Nobody edits text.
+    // Anyone may bump a post's last_at/reply_count by exactly one reply (+1 with a new reply, -1 when one is deleted).
+    // The author or the admin deletes a post or a reply; a post's author may also delete its replies (to delete the post).
+    function boardAuthorOk(d) {
+      return d.author_email == request.auth.token.email
+        && d.author_name is string && d.author_name.size() >= 1 && d.author_name.size() <= 60
+        && d.author_school is string && d.author_school.size() <= 80
+        && d.text is string && d.text.size() >= 1 && d.text.size() <= 1000;
+    }
+    match /teacher_board/{postId} {
+      allow read: if isTeacher();
+      allow create: if isTeacher() && boardAuthorOk(request.resource.data)
+        && request.resource.data.keys().hasOnly(['author_email', 'author_name', 'author_school', 'text', 'pinned', 'announce', 'created_at', 'last_at', 'reply_count'])
+        && request.resource.data.keys().hasAll(['author_email', 'author_name', 'author_school', 'text', 'pinned', 'announce', 'created_at', 'last_at', 'reply_count'])
+        && request.resource.data.pinned is bool && request.resource.data.announce is bool
+        && (isAdmin() || (request.resource.data.pinned == false && request.resource.data.announce == false))
+        && request.resource.data.created_at == request.time && request.resource.data.last_at == request.time
+        && request.resource.data.reply_count == 0;
+      allow update: if isTeacher()
+        && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_at', 'reply_count'])
+              && request.resource.data.reply_count == resource.data.reply_count + 1
+              && request.resource.data.last_at == request.time)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reply_count'])
+              && request.resource.data.reply_count == resource.data.reply_count - 1
+              && request.resource.data.reply_count >= 0)
+          || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned', 'announce'])
+              && request.resource.data.pinned is bool && request.resource.data.announce is bool));
+      allow delete: if isAdmin() || (isTeacher() && resource.data.author_email == request.auth.token.email);
+
+      match /replies/{replyId} {
+        allow read: if isTeacher();
+        allow create: if isTeacher() && boardAuthorOk(request.resource.data)
+          && request.resource.data.keys().hasOnly(['author_email', 'author_name', 'author_school', 'text', 'at'])
+          && request.resource.data.keys().hasAll(['author_email', 'author_name', 'author_school', 'text', 'at'])
+          && request.resource.data.at == request.time
+          && exists(/databases/$(database)/documents/teacher_board/$(postId));
+        allow update: if false;
+        allow delete: if isAdmin() || (isTeacher() && (resource.data.author_email == request.auth.token.email
+          || get(/databases/$(database)/documents/teacher_board/$(postId)).data.author_email == request.auth.token.email));
+      }
     }
 
 
@@ -484,7 +791,7 @@ service cloud.firestore {
       return d.keys().hasOnly(['name', 'game', 'class_code', 'owner', 'settings', 'grade', 'tries', 'open', 'opens_at', 'closes_at', 'created_at'])
         && (!('opens_at' in d) || d.opens_at is timestamp) && (!('closes_at' in d) || d.closes_at is timestamp)
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 60
-        && d.game in ['scale', 'tidal', 'rooftop', 'rhythm', 'earshot', 'listen']
+        && d.game in ['scale', 'tidal', 'rooftop', 'rhythm', 'earshot', 'synapse', 'listen']
         && d.grade in ['acc', 'score']
         && d.tries is int && d.tries >= 0 && d.tries <= 20
         && d.open is bool && d.settings is map && d.owner is string && d.class_code is string
