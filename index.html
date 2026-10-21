@@ -3265,11 +3265,12 @@ draw();
     });
     return t.unit === 'minutes' ? Math.floor(n / 60000) : n;
   }
-  // every task for this game in the student's classes that is open today: [{key, t, a, n}]
+  // every task for this game in the student's active class (the one picked on the home page) that is open today: [{key, t, a, n}]
   function tasks() {
     var p = prof(); if (!p) return [];
     var sid = sidOf(p), by = load('mtg_assign_v1:' + sid) || {}, h = load('mtg_hist_v1:' + sid), days = h && h.days ? h.days : {}, d = today(), out = [];
     Object.keys(by).forEach(function (code) {
+      if (code !== p.classCode) return;   // other saved classes wait until the student switches to them
       var a = by[code]; if (!a || !Array.isArray(a.tasks) || a.start > d || a.end < d) return;
       a.tasks.forEach(function (t, i) {
         if (!t || t.game !== GAME || !(Number(t.goal) > 0)) return;
