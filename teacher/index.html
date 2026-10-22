@@ -95,7 +95,18 @@ td.wrap{white-space:normal;max-width:420px}
 <script type="module">
 const FIREBASE = { apiKey: 'AIzaSyDU9vbCWJ4yWuD8bAX984DmQF4dvo13BHs', authDomain: 'rhythm-trainer-fc313.firebaseapp.com', projectId: 'rhythm-trainer-fc313', appId: '1:956677028482:web:c3ec72a279e61b6f6c929b' };
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
-const TEACHER_EMAILS = ['milnesda@eht.k12.nj.us', 'dcmilnes@gmail.com'], ADMIN_EMAILS = ['milnesda@eht.k12.nj.us', 'dcmilnes@gmail.com'];   // must match firestore.rules
+const TEACHER_EMAILS = [], ADMIN_EMAILS = [];   // filled by adminCheck() (admins in Firestore)
+// Admins are listed in Firestore (admins/<their Google email>, added in the Firebase Console), not in this file.
+// adminCheck reads that one entry after a Google sign-in and, for an admin, adds them to the lists above for this page.
+async function adminCheck(email) {
+  email = String(email || '').toLowerCase();
+  if (!email) return false;
+  const lists = [TEACHER_EMAILS, ADMIN_EMAILS];
+  if (lists[0].includes(email)) return true;
+  try { const { fs, db } = await (fbAuth)(); if (!(await fs.getDoc(fs.doc(db, 'admins', email))).exists()) return false; } catch { return false; }
+  lists.forEach(l => l.includes(email) || l.push(email));
+  return true;
+}
 const GOAL = 25;
 const GAMES = [['filter','Filter'],['peak','Peak'],['eq','Boost/Cut'],['gain','Gain'],['comp','Comp'],['pan','Balance'],['space','Reverb'],['tone','Hz'],['beat','Beat']];
 // full names and level labels, copied from the Listening Lab's GAMES (keep in step with ../index.html)
@@ -153,7 +164,7 @@ function signInScreen(err) {
   };
 }
 async function isTeacher(email) {
-  if (TEACHER_EMAILS.includes(email)) return true;
+  if (TEACHER_EMAILS.includes(email) || await adminCheck(email)) return true;
   const { fs, db } = await fb(); return (await fs.getDoc(fs.doc(db, 'teachers', email))).exists();
 }
 async function signedIn(email) {

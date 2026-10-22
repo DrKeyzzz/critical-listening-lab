@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Firestore security rules for Mr. Milnes's music games:
+// Firestore security rules for Music Theory Games:
 //   Rhythm Dictation Trainer  https://drkeyzzz.github.io/rhythm-trainer/
 //   Scale Quest               https://drkeyzzz.github.io/scale-quest/
 //   Tidal Tones               https://drkeyzzz.github.io/tidal-tones/
@@ -23,19 +23,21 @@ service cloud.firestore {
     }
     // TEACHERS: only teachers can create or manage classes and use the teacher dashboards.
     // Students share the school's email domain, so this is what keeps them out.
-    // A teacher is either built in below (so the admin can never be locked out) or approved by the
+    // A teacher is an admin (so the admin can never be locked out) or approved by the
     // admin in a dashboard's ADMIN tab, which adds them to the `teachers` collection.
-    function teacherEmails() {
-      return ['milnesda@eht.k12.nj.us', 'dcmilnes@gmail.com'];
-    }
     function isTeacher() {
-      return signedIn() && (request.auth.token.email in teacherEmails()
-        || exists(/databases/$(database)/documents/teachers/$(request.auth.token.email)));
+      return signedIn() && (exists(/databases/$(database)/documents/teachers/$(request.auth.token.email))
+        || isAdmin());
     }
-    // DEVELOPER SCORES: only the admin, signed in with Google, can post as "Milnes D." or mark a score
+    // DEVELOPER SCORES: only the admin, signed in with Google, can post as "Maestro" or mark a score
     // dev: true. Developer scores show on every class's board with a DEV badge.
     function devOk(d) {
-      return isAdmin() || (!('dev' in d) && !d.name.lower().matches('milnes *d[.]? *'));
+      return (!('dev' in d) && !d.name.lower().matches('maestro.*')) || isAdmin();
+    }
+    // The admin may rename a score to "Maestro" (renaming the old developer scores); nothing else changes.
+    function devRename() {
+      return isAdmin() && request.resource.data.name == 'Maestro'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
     }
     // PLAYER ICONS: a score may carry the player's icon, but only one from the games' icon set.
     function iconOk(d) {
@@ -56,8 +58,15 @@ service cloud.firestore {
         || ('class_codes' in r && r.class_codes is list && r.class_codes.size() >= 2
             && (ownsClass(r.class_codes[1]) || (r.class_codes.size() > 2 && ownsClass(r.class_codes[2]))));
     }
+    // ADMINS are listed in the `admins` collection (doc id = their Google email), added by hand in the
+    // Firebase Console, so no email is written in the games' code.
     function isAdmin() {
-      return signedIn() && request.auth.token.email in ['milnesda@eht.k12.nj.us', 'dcmilnes@gmail.com'];
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+    // The admin list: a signed-in teacher can check only their own entry; nobody can change it from a game.
+    match /admins/{email} {
+      allow get: if signedIn() && request.auth.token.email == email;
+      allow list, write: if false;
     }
     function ownsClass(code) {
       return isTeacher() && code != ''
@@ -122,7 +131,7 @@ service cloud.firestore {
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.sid.matches('^[a-z]{2,16}$')
         && request.resource.data.student is string && request.resource.data.student.size() <= 24
-        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!request.resource.data.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && request.resource.data.rhythms is int && request.resource.data.rhythms >= 0 && request.resource.data.rhythms <= 5000
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
         && request.resource.data.score is int && request.resource.data.score >= 0 && request.resource.data.score <= 100
@@ -154,7 +163,7 @@ service cloud.firestore {
         && request.resource.data.time_sec >= 1 && request.resource.data.time_sec <= 36000
         && request.resource.data.created_at == request.time;
 
-      allow update: if false;
+      allow update: if devRename();
 
       // The admin can delete any score; a teacher can delete scores in their own classes.
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -166,7 +175,7 @@ service cloud.firestore {
     match /scale_scores/{scoreId} {
       allow read: if true;
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -174,7 +183,7 @@ service cloud.firestore {
     match /degree_scores/{scoreId} {
       allow read: if true;
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -182,7 +191,7 @@ service cloud.firestore {
     match /key_scores/{scoreId} {
       allow read: if true;
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -198,7 +207,7 @@ service cloud.firestore {
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.sid.matches('^[a-z]{2,16}$')
         && request.resource.data.student is string && request.resource.data.student.size() <= 24
-        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!request.resource.data.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && request.resource.data.questions is int && request.resource.data.questions >= 0 && request.resource.data.questions <= 10000
         && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.questions
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
@@ -230,7 +239,7 @@ service cloud.firestore {
     match /nova_scores/{scoreId} {
       allow read: if true;
       allow create: if novaScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -256,7 +265,7 @@ service cloud.firestore {
     match /tidal_scores/{scoreId} {
       allow read: if true;
       allow create: if tidalScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -272,7 +281,7 @@ service cloud.firestore {
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.sid.matches('^[a-z]{2,16}$')
         && request.resource.data.student is string && request.resource.data.student.size() <= 24
-        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!request.resource.data.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && request.resource.data.answers is int && request.resource.data.answers >= 0 && request.resource.data.answers <= 20000
         && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.answers
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
@@ -294,7 +303,7 @@ service cloud.firestore {
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.sid.matches('^[a-z]{2,16}$')
         && request.resource.data.student is string && request.resource.data.student.size() <= 24
-        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!request.resource.data.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && request.resource.data.answers is int && request.resource.data.answers >= 0 && request.resource.data.answers <= 20000
         && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.answers
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
@@ -317,7 +326,7 @@ service cloud.firestore {
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.sid.matches('^[a-z]{2,16}$')
         && request.resource.data.student is string && request.resource.data.student.size() <= 24
-        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!request.resource.data.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
         && request.resource.data.rounds is int && request.resource.data.rounds >= 0 && request.resource.data.rounds <= 20000
         && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.rounds
@@ -333,7 +342,7 @@ service cloud.firestore {
     match /listening_scores/{scoreId} {
       allow read: if true;
       allow create: if listenScore(request.resource.data) && devOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
     }
     function listenScore(d) {
@@ -371,7 +380,7 @@ service cloud.firestore {
     match /sight_scores/{scoreId} {
       allow read: if true;
       allow create: if sightScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -387,7 +396,7 @@ service cloud.firestore {
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.sid.matches('^[a-z]{2,16}$')
         && request.resource.data.student is string && request.resource.data.student.size() <= 24
-        && (isAdmin() || !request.resource.data.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!request.resource.data.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && request.resource.data.answers is int && request.resource.data.answers >= 0 && request.resource.data.answers <= 50000
         && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.answers
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
@@ -439,7 +448,7 @@ service cloud.firestore {
     match /synapse_scores/{scoreId} {
       allow read: if true;
       allow create: if synapseScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -462,7 +471,7 @@ service cloud.firestore {
     match /intervals_scores/{scoreId} {
       allow read: if true;
       allow create: if intervalsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -484,7 +493,7 @@ service cloud.firestore {
     match /chords_scores/{scoreId} {
       allow read: if true;
       allow create: if chordsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -506,7 +515,7 @@ service cloud.firestore {
     match /progressions_scores/{scoreId} {
       allow read: if true;
       allow create: if progressionsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -528,7 +537,7 @@ service cloud.firestore {
     match /scales_scores/{scoreId} {
       allow read: if true;
       allow create: if scalesScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -551,7 +560,7 @@ service cloud.firestore {
     match /earshot_scores/{scoreId} {
       allow read: if true;
       allow create: if earshotScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
-      allow update: if false;
+      allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
@@ -577,7 +586,7 @@ service cloud.firestore {
     match /earshot_posters/{docId} {
       allow read: if true;
       allow create, update: if earshotPosters(docId, request.resource.data)
-        && (isAdmin() || !request.resource.data.name.lower().matches('milnes *d[.]? *'));   // only the developer can be Milnes D.
+        && (!request.resource.data.name.lower().matches('maestro.*') || isAdmin());   // only the developer can be Maestro
       allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
     }
 
@@ -623,7 +632,7 @@ service cloud.firestore {
         && d.game in ['scale-quest', 'tidal-tones', 'earshot-saloon', 'rhythm-trainer', 'rooftop-runner', 'ear-brain', 'hub', 'critical-listening-lab']
         && d.text is string && d.text.size() >= 3 && d.text.size() <= 300
         && d.name is string && d.name.size() <= 24
-        && (isAdmin() || !d.name.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!d.name.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && d.class_code is string && d.owner is string && d.owner.size() <= 100
         && (d.class_code == ''
           ? d.owner == ''
@@ -656,7 +665,7 @@ service cloud.firestore {
       return d.keys().hasOnly(['name', 'sid', 'class_code', 'total_min', 'week', 'week_min', 'day', 'day_min', 'updated_at'])
         && d.keys().hasAll(['name', 'sid', 'class_code', 'total_min', 'week', 'week_min', 'day', 'day_min', 'updated_at'])
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 24
-        && (isAdmin() || !d.name.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!d.name.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
         && d.class_code is string
         && ((d.class_code == '' && docId == 'none_' + d.sid)
@@ -674,6 +683,40 @@ service cloud.firestore {
       return (p == oldP && n >= oldN && n <= oldN + 30) || (p != oldP && n <= 30);
     }
 
+
+    // ================= Music Theory Super Genius leaderboard (added 2026-10-22) =================
+    // One document per student per class: genius_scores/<class code or 'none'>_<sid>, the student's best flight
+    // (correct = right answers 0-20, lives left 0-3, flight time in ms, rank = ranks earned 0-3). Anyone can read it
+    // (the leaderboard). It can only be replaced by a better flight: more right, or as many right with more lives
+    // left, or the same with a faster time. Only the admin or the class's teacher can delete one.
+    match /genius_scores/{docId} {
+      allow read: if true;
+      allow create: if geniusOk(docId, request.resource.data);
+      allow update: if geniusOk(docId, request.resource.data)
+        && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
+        && geniusBetter(request.resource.data, resource.data);
+      allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
+    }
+
+    function geniusOk(docId, d) {
+      return d.keys().hasOnly(['name', 'sid', 'class_code', 'correct', 'lives', 'ms', 'rank', 'updated_at'])
+        && d.keys().hasAll(['name', 'sid', 'class_code', 'correct', 'lives', 'ms', 'rank', 'updated_at'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 24
+        && (!d.name.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
+        && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
+        && d.class_code is string
+        && ((d.class_code == '' && docId == 'none_' + d.sid)
+            || (d.class_code != '' && docId == d.class_code + '_' + d.sid
+                && exists(/databases/$(database)/documents/classes/$(d.class_code))))
+        && d.correct is int && d.correct >= 0 && d.correct <= 20
+        && d.lives is int && d.lives >= 0 && d.lives <= 3
+        && d.ms is int && d.ms >= 0 && d.ms <= 86400000
+        && d.rank is int && d.rank >= 0 && d.rank <= 3
+        && d.updated_at == request.time;
+    }
+    function geniusBetter(n, o) {
+      return n.correct > o.correct || (n.correct == o.correct && (n.lives > o.lives || (n.lives == o.lives && n.ms < o.ms)));
+    }
 
     // ================= Teacher messages (added 2026-10-18) =================
     // One private conversation per teacher with the admin. teacher_threads/<teacher's email> is the summary (last line,
@@ -829,7 +872,7 @@ service cloud.firestore {
         && (testDoc(d.test).tries == 0 || d.tries <= testDoc(d.test).tries)
         && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
         && d.student is string && d.student.size() <= 24
-        && (isAdmin() || !d.student.lower().matches('milnes *d[.]? *'))   // only the developer can be Milnes D.
+        && (!d.student.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && d.tries is int && d.tries >= 1 && d.tries <= 100
         && d.best is int && d.best >= 0 && d.best <= 1000000
         && d.best_acc is int && d.best_acc >= 0 && d.best_acc <= 100
