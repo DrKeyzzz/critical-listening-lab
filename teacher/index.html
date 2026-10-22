@@ -427,7 +427,7 @@ async function loadAdmin() {
   $('out').innerHTML = '<p class="muted">Loading…</p>';
   try {
     let rows, teachers, requests;
-    if (PREVIEW) { rows = [...sampleRows('PREVW'), ...sampleRows('PREV2').map(r => ({ ...r, owner:'r.kim@sample' }))]; teachers = [{ email:'r.kim@sample', name:'Ron Kim', school:'EHT High School' }]; requests = [{ email:'j.shaw@sample', name:'Jo Shaw', school:'Middle School', note:'Teaching a recording elective next semester' }]; }
+    if (PREVIEW) { rows = [...sampleRows('PREVW'), ...sampleRows('PREV2').map(r => ({ ...r, owner:'r.kim@sample' }))]; teachers = [{ email:'r.kim@sample', name:'Ron Kim', school:'Sample High School' }]; requests = [{ email:'j.shaw@sample', name:'Jo Shaw', school:'Middle School', note:'Teaching a recording elective next semester' }]; }
     else { const { fs, db } = await fb(), from = daysBack(30)[0];
       rows = (await fs.getDocs(fs.query(fs.collection(db, 'listening_progress'), fs.where('date', '>=', from)))).docs.map(d => d.data());
       teachers = (await fs.getDocs(fs.collection(db, 'teachers'))).docs.map(d => ({ email: d.id, ...d.data() }));
