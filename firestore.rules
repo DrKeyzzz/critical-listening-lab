@@ -103,7 +103,7 @@ service cloud.firestore {
 
       allow create: if isTeacher()
         && code.matches('^[A-Z0-9]{4,7}$')   // random 5-character codes, or a teacher's own 4–7 character code
-        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'listen_assignment'])
+        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment'])
         && request.resource.data.ownerEmail == request.auth.token.email
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
@@ -111,7 +111,7 @@ service cloud.firestore {
 
       allow update: if isTeacher()
         && resource.data.ownerEmail == request.auth.token.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'listen_assignment'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40;
 
