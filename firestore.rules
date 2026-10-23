@@ -23,8 +23,8 @@ service cloud.firestore {
     }
     // TEACHERS: only teachers can create or manage classes and use the teacher dashboards.
     // Students share the school's email domain, so this is what keeps them out.
-    // A teacher is an admin (so the admin can never be locked out) or approved by the
-    // admin in a dashboard's ADMIN tab, which adds them to the `teachers` collection.
+    // A teacher is an admin (so the admin can never be locked out) or is in the `teachers` collection:
+    // approved by the admin in a dashboard's ADMIN tab, or joined on their own with a school email (schoolEmail).
     function isTeacher() {
       return signedIn() && (exists(/databases/$(database)/documents/teachers/$(request.auth.token.email))
         || isAdmin());
@@ -74,14 +74,30 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/classes/$(code)).data.ownerEmail == request.auth.token.email;
     }
 
-    // Approved teachers (document ID = their Google email). Only the admin adds or removes them.
+    // SCHOOL EMAILS: a Google address with only letters (and . _ -) before the @ on a k12.xx.us or .edu domain.
+    // Student addresses have numbers in them (or "stu" in the domain), so they don't count and must ask instead.
+    function schoolEmail(e) {
+      return e.matches('^[a-z._-]+@([a-z0-9-]+[.])*(k12[.][a-z][a-z][.]us|edu)$') && !e.matches('.*@.*stu.*');
+    }
+    // Approved teachers (document ID = their Google email). The admin adds or removes them; a teacher with a
+    // school email may add themselves once (approved_by 'self') unless the admin blocked that address.
     match /teachers/{email} {
       allow read: if isAdmin() || (signedIn() && request.auth.token.email == email);
       allow create, update: if isAdmin()
         && request.resource.data.keys().hasOnly(['name', 'school', 'approved_at', 'approved_by'])
         && request.resource.data.name is string && request.resource.data.name.size() <= 60
         && request.resource.data.school is string && request.resource.data.school.size() <= 80;
+      allow create: if signedIn() && request.auth.token.email == email && schoolEmail(email)
+        && !exists(/databases/$(database)/documents/teacher_blocks/$(email))
+        && request.resource.data.keys().hasOnly(['name', 'school', 'approved_at', 'approved_by'])
+        && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 60
+        && request.resource.data.school is string && request.resource.data.school.size() <= 80
+        && request.resource.data.approved_by == 'self' && request.resource.data.approved_at == request.time;
       allow delete: if isAdmin();
+    }
+    // Addresses the admin removed and blocked: they can't add themselves again (they can still ask).
+    match /teacher_blocks/{email} {
+      allow read, write: if isAdmin();
     }
 
     // Requests for teacher access. Anyone signed in can ask once for themselves; the admin approves or denies.

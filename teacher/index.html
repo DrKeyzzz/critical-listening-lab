@@ -318,16 +318,22 @@ async function signedIn(email) {
   $('gate').hidden = true; $('main').hidden = false;
   await loadClasses();
 }
+/* Teachers with a school email (letters only before the @, on a k12.xx.us or .edu domain) join on their own; student addresses have numbers. Same check as schoolEmail() in the rules. */
+const schoolEmail = e => /^[a-z._-]+@([a-z0-9-]+[.])*(k12[.][a-z][a-z][.]us|edu)$/.test(e) && !/@.*stu/.test(e);
 async function requestScreen(email) {
   let pending = false;
   try { const { fs, db } = await fb(); pending = (await fs.getDoc(fs.doc(db, 'teacher_requests', email))).exists(); } catch (e) {}
   if (pending) return gate(`<h2>Request sent</h2><p class="muted">Your teacher access request for <b>${esc(email)}</b> is waiting for approval. Check back once you hear it's approved.</p>`);
   gate(`<h2 style="margin-bottom:8px">Request teacher access</h2><p class="muted"><b>${esc(email)}</b> isn't set up as a teacher yet. Send a request and the admin will approve it.</p>
     <div style="display:grid;gap:10px;max-width:460px"><label class="f">Your name<input id="r-name" maxlength="60"></label><label class="f">School<input id="r-school" maxlength="80"></label>
-    <label class="f">Note (optional)<textarea id="r-note" maxlength="300" rows="2"></textarea></label><div class="row"><button class="btn primary" id="r-go">Send request</button></div><p class="err" id="r-err"></p></div>`);
+    <label class="f">Note (optional)<textarea id="r-note" maxlength="300" rows="2"></textarea></label><div class="row"><button class="btn primary" id="r-go">${schoolEmail(email) ? 'Start now' : 'Send request'}</button></div><p class="err" id="r-err"></p></div>`);
   $('r-go').onclick = async () => {
     const name = $('r-name').value.trim(), school = $('r-school').value.trim(), note = $('r-note').value.trim();
     if (name.length < 2) return $('r-err').textContent = 'Type your name.';
+    if (schoolEmail(email)) {
+      try { const { fs, db } = await fb(); await fs.setDoc(fs.doc(db, 'teachers', email), { name: name.slice(0, 60), school: school.slice(0, 80), approved_at: fs.serverTimestamp(), approved_by: 'self' }); return signedIn(email); }
+      catch (e) { /* blocked by the admin: ask instead */ }
+    }
     try { const { fs, db } = await fb(); await fs.setDoc(fs.doc(db, 'teacher_requests', email), { email, name, school, note, created_at: fs.serverTimestamp() }); requestScreen(email); }
     catch (e) { $('r-err').innerHTML = errText(e); }
   };
