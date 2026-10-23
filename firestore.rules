@@ -831,7 +831,8 @@ service cloud.firestore {
     }
 
     function testOk(d) {
-      return d.keys().hasOnly(['name', 'game', 'class_code', 'owner', 'settings', 'grade', 'tries', 'open', 'opens_at', 'closes_at', 'created_at'])
+      return d.keys().hasOnly(['name', 'game', 'class_code', 'owner', 'settings', 'grade', 'tries', 'open', 'opens_at', 'closes_at', 'created_at', 'out_of'])
+        && (!('out_of' in d) || (d.out_of is int && d.out_of >= 1 && d.out_of <= 1000))   // grade shown as points out of this
         && (!('opens_at' in d) || d.opens_at is timestamp) && (!('closes_at' in d) || d.closes_at is timestamp)
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 60
         && d.game in ['scale', 'tidal', 'rooftop', 'rhythm', 'earshot', 'synapse', 'listen']
