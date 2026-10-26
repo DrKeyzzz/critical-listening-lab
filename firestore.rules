@@ -573,12 +573,25 @@ service cloud.firestore {
     }
 
     // ================= Brainwaves: Perfect Pitch (added 2026-10-26) =================
-    // Same shape as Scales and modes: a finished run (score, rounds, deepest level 1-8, accuracy %, best streak).
+    // A finished run: score, rounds, deepest level (1-9; level 9 is Ultimate, with the Distractors), accuracy %, best streak.
     match /pitch_scores/{scoreId} {
       allow read: if true;
-      allow create: if scalesScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow create: if pitchScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
+    }
+
+    function pitchScore(d) {
+      return d.keys().hasOnly(['name', 'class_code', 'score', 'rounds', 'floor', 'acc', 'streak', 'created_at', 'dev', 'icon', 'class_codes'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
+        && d.get('class_code', '') is string
+        && (d.get('class_code', '') == '' || exists(/databases/$(database)/documents/classes/$(d.class_code)))
+        && d.score is int && d.score >= 0 && d.score <= 100000000
+        && d.rounds is int && d.rounds >= 1 && d.rounds <= 10000
+        && d.floor is int && d.floor >= 1 && d.floor <= 9
+        && d.acc is int && d.acc >= 0 && d.acc <= 100
+        && d.streak is int && d.streak >= 0 && d.streak <= 10000
+        && d.created_at == request.time;
     }
 
     // ================= Earshot Saloon =================
