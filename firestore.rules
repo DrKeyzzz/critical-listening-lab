@@ -323,7 +323,7 @@ service cloud.firestore {
         && request.resource.data.answers is int && request.resource.data.answers >= 0 && request.resource.data.answers <= 20000
         && request.resource.data.correct is int && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.answers
         && request.resource.data.minutes is int && request.resource.data.minutes >= 0 && request.resource.data.minutes <= 1440
-        && request.resource.data.by_area is map && request.resource.data.by_area.keys().hasOnly(['synapse', 'intervals', 'chords', 'progressions', 'scales', 'voice', 'tuner'])
+        && request.resource.data.by_area is map && request.resource.data.by_area.keys().hasOnly(['synapse', 'intervals', 'chords', 'progressions', 'scales', 'voice', 'tuner', 'pitch'])
         && request.resource.data.updated_at == request.time;
 
       allow delete: if isAdmin() || (isTeacher() && resource.data.owner == request.auth.token.email);
@@ -447,7 +447,7 @@ service cloud.firestore {
     }
 
     function earbrainProgress(d) {
-      return d.keys().hasOnly(['name', 'class_code', 'synapse', 'intervals', 'voice', 'chords', 'progressions', 'scales', 'updated_at'])
+      return d.keys().hasOnly(['name', 'class_code', 'synapse', 'intervals', 'voice', 'chords', 'progressions', 'scales', 'pitch', 'updated_at'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 24
         && d.class_code is string && d.class_code.size() <= 12
         && d.synapse is list && d.synapse.size() <= 12
@@ -456,6 +456,7 @@ service cloud.firestore {
         && d.get('chords', []) is list && d.get('chords', []).size() <= 12
         && d.get('progressions', []) is list && d.get('progressions', []).size() <= 12
         && d.get('scales', []) is list && d.get('scales', []).size() <= 12
+        && d.get('pitch', []) is list && d.get('pitch', []).size() <= 12
         && d.updated_at == request.time;
     }
 
@@ -569,6 +570,15 @@ service cloud.firestore {
         && d.acc is int && d.acc >= 0 && d.acc <= 100
         && d.streak is int && d.streak >= 0 && d.streak <= 10000
         && d.created_at == request.time;
+    }
+
+    // ================= Brainwaves: Perfect Pitch (added 2026-10-26) =================
+    // Same shape as Scales and modes: a finished run (score, rounds, deepest level 1-8, accuracy %, best streak).
+    match /pitch_scores/{scoreId} {
+      allow read: if true;
+      allow create: if scalesScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if devRename();
+      allow delete: if isAdmin() || ownsAnyClass(resource.data);
     }
 
     // ================= Earshot Saloon =================
