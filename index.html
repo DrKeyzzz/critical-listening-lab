@@ -3215,13 +3215,33 @@ async function finishTest(acc) {
 // One row per finished full session (10 rounds, Beat Recreate 6), not workouts or tests. Students in a class post to
 // their class board and the World board; "not in a class" students post to World only; guests don't post.
 // The board shows each player's best score in every game, plus a total of those bests. Click a column to sort by it.
+// PRIVACY (2026-10-29): the class copy is saved inside the class (classes/<code>/listening_scores), so reading it needs the code.
+// The World board reads world_scores/listen_<game>/runs: only the student's first name and last initial (nick), level, score and
+// accuracy. No class code. Each run is one batch: the class copy (if in a class) + the World copy.
 const SHORT = { filter:'Filter', peak:'Peak', eq:'Boost/Cut', gain:'Gain', comp:'Comp', pan:'Balance', space:'Reverb', tone:'Hz', beat:'Beat' };
+const WORLD_PER_GAME = 160;   // 9 games x 160 = at most 1440 reads, under the old single 1500-row World query
+const classScores = (fs, db, code) => fs.collection(db, 'classes', code, 'listening_scores');
+const worldRuns = (fs, db, game) => fs.collection(db, 'world_scores', 'listen_' + game, 'runs');
+// The World name: the home page's signed-in student when there is one (as histNote does), else this app's sign-in. "First L."
+function myNick() {
+  let hub = null; try { if (sessionStorage.getItem('music_guest') !== '1') hub = JSON.parse(localStorage.getItem('rdt_profile_v1') || 'null'); } catch (e) {}
+  const u = hub && hub.first && hub.init ? hub : P;
+  return `${String(u.first).charAt(0).toUpperCase()}${String(u.first).slice(1)} ${u.init}.`.slice(0, 24);
+}
 async function postScore(acc) {
   if (S.test || S.workout || P.guest || !signedIn() || S.rounds !== (S.g.rounds || 10)) return;
-  const doc = { name: displayName(P).slice(0, 24), class_code: P.code && P.owner ? P.code : '', game: S.g.id, score: Math.min(100000, S.score), acc, level: S.level, rounds: S.rounds };
-  try { const { fs, db } = await withTimeout(fb()); await withTimeout(fs.addDoc(fs.collection(db, 'listening_scores'), { ...doc, created_at: fs.serverTimestamp() }));
-    for (const [k, c] of Object.entries(B.cache)) if (k === 'world:' || k === 'class:' + doc.class_code) c.rows.push({ ...doc, created_at: new Date() });   // show it on cached boards
-    const n = $('rNote'); if (n && !$('vResults').hidden) n.textContent += ` Score posted to the ${doc.class_code ? 'class and World leaderboards' : 'World leaderboard'}.`; }
+  const code = P.code && P.owner ? P.code : '', nick = myNick();
+  const doc = { name: displayName(P).slice(0, 24), class_code: code, game: S.g.id, score: Math.min(100000, S.score), acc, level: S.level, rounds: S.rounds };
+  const wdoc = { nick, level: String(S.level), score: doc.score, acc };
+  const toWorld = nick.length >= 2 && !/^maestro/i.test(nick);   // the World rules refuse "Maestro" (the developer's name)
+  if (!code && !toWorld) return;
+  try { const { fs, db } = await withTimeout(fb()), batch = fs.writeBatch(db);
+    if (code) batch.set(fs.doc(classScores(fs, db, code)), { ...doc, created_at: fs.serverTimestamp() });
+    if (toWorld) batch.set(fs.doc(worldRuns(fs, db, doc.game)), { ...wdoc, created_at: fs.serverTimestamp() });
+    await withTimeout(batch.commit());
+    const wrow = { name: nick, game: doc.game, score: doc.score, acc, level: S.level, created_at: new Date() };
+    for (const [k, c] of Object.entries(B.cache)) if (k === 'world:' && toWorld) c.rows.push(wrow); else if (code && k === 'class:' + code) c.rows.push({ ...doc, created_at: new Date() });   // show it on cached boards
+    const n = $('rNote'); if (n && !$('vResults').hidden) n.textContent += ` Score posted to the ${code ? (toWorld ? 'class and World leaderboards' : 'class leaderboard') : 'World leaderboard'}.`; }
   catch (e) { /* offline: the score just isn't posted */ }
 }
 const B = { scope:'class', when:0, sort:'total', rows:null, key:'', cache:{} };
@@ -3237,25 +3257,29 @@ async function loadBoard() {
   $('bNote').textContent = 'Loading…'; if (B.key !== key) $('bOut').innerHTML = '';
   const hit = B.cache[key];   // kept 5 minutes, so switching Class/World or reopening the board costs no reads
   if (hit && Date.now() - hit.t < 300000) { B.rows = hit.rows; B.key = key; return renderBoard(); }
-  try { const { fs, db } = await withTimeout(fb()), col = fs.collection(db, 'listening_scores');
-    const q = B.scope === 'class' ? fs.query(col, fs.where('class_code', '==', P.code)) : fs.query(col, fs.orderBy('score', 'desc'), fs.limit(1500));
-    B.rows = (await withTimeout(fs.getDocs(q))).docs.map(d => d.data()); B.key = key; B.cache[key] = { t: Date.now(), rows: B.rows }; renderBoard(); }
+  try { const { fs, db } = await withTimeout(fb());
+    if (B.scope === 'class') B.rows = (await withTimeout(fs.getDocs(classScores(fs, db, P.code)))).docs.map(d => d.data());
+    else {   // World: the best runs of each game; rows carry only the student's name (nick), never a class code
+      const snaps = await withTimeout(Promise.all(GAMES.map(g => fs.getDocs(fs.query(worldRuns(fs, db, g.id), fs.orderBy('score', 'desc'), fs.limit(WORLD_PER_GAME))))));
+      B.rows = snaps.flatMap((s, i) => s.docs.map(d => { const r = d.data(); return { name: r.nick, game: GAMES[i].id, score: r.score, acc: r.acc, level: +r.level || r.level, created_at: r.created_at }; }));
+    }
+    B.key = key; B.cache[key] = { t: Date.now(), rows: B.rows }; renderBoard(); }
   catch (e) { $('bNote').textContent = "Couldn't load the leaderboard. Check your internet and try again."; }
 }
 function renderBoard() {
-  const since = B.when ? Date.now() - B.when * 864e5 : 0, me = displayName(P) + '|' + (P.code && P.owner ? P.code : '');
+  const world = B.scope === 'world', since = B.when ? Date.now() - B.when * 864e5 : 0, me = world ? myNick() : displayName(P);
   const by = {};
   for (const r of B.rows || []) {
     if (!G(r.game) || (since && msOf(r.created_at) && msOf(r.created_at) < since)) continue;
-    const k = r.name + '|' + (r.class_code || ''), p = by[k] ||= { name:r.name, code:r.class_code || '', best:{}, plays:0 };
+    const k = r.name, p = by[k] ||= { name:r.name, best:{}, plays:0 };
     p.plays++; if (!p.best[r.game] || r.score > p.best[r.game].score) p.best[r.game] = { score:r.score, acc:r.acc, level:r.level };
   }
   const list = Object.entries(by).map(([k, p]) => ({ ...p, key:k, total: Object.values(p.best).reduce((a, b) => a + b.score, 0), games: Object.keys(p.best).length }));
   const val = p => B.sort === 'total' ? p.total : B.sort === 'games' ? p.games : (p.best[B.sort] || {}).score ?? -1;
   const shown = list.filter(p => B.sort === 'total' || B.sort === 'games' || p.best[B.sort]).sort((a, b) => val(b) - val(a) || b.total - a.total).slice(0, 100);
-  const world = B.scope === 'world', th = (k, label, l) => `<th data-k="${k}" class="${l ? 'l ' : ''}${B.sort === k ? 'on' : ''}">${label}</th>`;
+  const th = (k, label, l) => `<th data-k="${k}" class="${l ? 'l ' : ''}${B.sort === k ? 'on' : ''}">${label}</th>`;
   $('bNote').textContent = shown.length ? `${world ? 'World' : P.className || 'Your class'} · ${B.when ? 'last ' + (B.when === 7 ? 'week' : 'month') : 'all time'} · best score in each game. Click a column to sort by that game.` : '';
-  $('bOut').innerHTML = shown.length ? `<table><thead><tr><th class="l">#</th><th class="l">Player</th>${th('total', 'Total')}${th('games', 'Games')}${GAMES.map(g => th(g.id, SHORT[g.id])).join('')}</tr></thead><tbody>${shown.map((p, i) => `<tr class="${p.key === me ? 'me' : ''}"><td class="l rk">${i + 1}</td><td class="l"><b>${esc(p.name)}</b>${world && p.code ? ` <small class="dim">${esc(p.code)}</small>` : ''}</td>
+  $('bOut').innerHTML = shown.length ? `<table><thead><tr><th class="l">#</th><th class="l">Player</th>${th('total', 'Total')}${th('games', 'Games')}${GAMES.map(g => th(g.id, SHORT[g.id])).join('')}</tr></thead><tbody>${shown.map((p, i) => `<tr class="${p.key === me ? 'me' : ''}"><td class="l rk">${i + 1}</td><td class="l"><b>${esc(p.name)}</b></td>
       <td class="${B.sort === 'total' ? 'on' : ''}">${p.total.toLocaleString()}</td><td class="${B.sort === 'games' ? 'on' : ''}">${p.games}</td>${GAMES.map(g => { const b = p.best[g.id]; return `<td class="${B.sort === g.id ? 'on' : ''} ${b ? '' : 'dim'}" title="${b ? `Level ${b.level}, ${b.acc}% correct` : ''}">${b ? b.score.toLocaleString() : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`
     : `<p class="note" style="padding:16px;margin:0">No scores ${B.when ? 'in this period ' : ''}yet${B.sort !== 'total' && B.sort !== 'games' ? ' for ' + G(B.sort).name : ''}. Finish a full game (not today's session) to post one.</p>`;
   $('bOut').querySelectorAll('th[data-k]').forEach(h => h.onclick = () => { B.sort = h.dataset.k; renderBoard(); });
