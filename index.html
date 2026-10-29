@@ -3158,7 +3158,7 @@ async function refreshClass(force) {
   if (!force && Date.now() - lastClassCheck < 120000) return; lastClassCheck = Date.now();
   try {
     const { fs, db } = await withTimeout(fb()), me = P;
-    const [cls, list] = await withTimeout(Promise.all([fs.getDoc(fs.doc(db, 'classes', P.code)), fs.getDocs(fs.query(fs.collection(db, 'tests'), fs.where('class_code', '==', P.code)))]));
+    const [cls, list] = await withTimeout(Promise.all([fs.getDoc(fs.doc(db, 'classes', P.code)), fs.getDocs(fs.query(fs.collection(db, 'tests'), fs.where('class_code', '==', P.code), fs.where('open', '==', true)))]));   // open tests only (closed ones are never shown)
     if (me !== P) return;
     if (cls.exists()) { P.assign = cls.data().listen_assignment || null; P.className = cls.data().name || P.className; }
     const tests = list.docs.map(d => ({ id:d.id, ...d.data() })).filter(t => t.game === 'listen' && t.settings && G(t.settings.game))
@@ -3219,7 +3219,8 @@ async function finishTest(acc) {
 // The World board reads world_scores/listen_<game>/runs: only the student's first name and last initial (nick), level, score and
 // accuracy. No class code. Each run is one batch: the class copy (if in a class) + the World copy.
 const SHORT = { filter:'Filter', peak:'Peak', eq:'Boost/Cut', gain:'Gain', comp:'Comp', pan:'Balance', space:'Reverb', tone:'Hz', beat:'Beat' };
-const WORLD_PER_GAME = 160;   // 9 games x 160 = at most 1440 reads, under the old single 1500-row World query
+const WORLD_PER_GAME = 40;    // 9 games x 40 = at most 360 reads (was 160 each; Spark plan reads, 2026-10-29)
+const CLASS_MAX = 400;        // a class board reads at most its 400 best runs
 const classScores = (fs, db, code) => fs.collection(db, 'classes', code, 'listening_scores');
 const worldRuns = (fs, db, game) => fs.collection(db, 'world_scores', 'listen_' + game, 'runs');
 // The World name: the home page's signed-in student when there is one (as histNote does), else this app's sign-in. "First L."
@@ -3255,10 +3256,10 @@ function openBoard() {
 async function loadBoard() {
   const key = B.scope + ':' + (B.scope === 'class' ? P.code : '');
   $('bNote').textContent = 'Loading…'; if (B.key !== key) $('bOut').innerHTML = '';
-  const hit = B.cache[key];   // kept 5 minutes, so switching Class/World or reopening the board costs no reads
-  if (hit && Date.now() - hit.t < 300000) { B.rows = hit.rows; B.key = key; return renderBoard(); }
+  const hit = B.cache[key];   // kept 15 minutes, so switching Class/World or reopening the board costs no reads
+  if (hit && Date.now() - hit.t < 900000) { B.rows = hit.rows; B.key = key; return renderBoard(); }
   try { const { fs, db } = await withTimeout(fb());
-    if (B.scope === 'class') B.rows = (await withTimeout(fs.getDocs(classScores(fs, db, P.code)))).docs.map(d => d.data());
+    if (B.scope === 'class') B.rows = (await withTimeout(fs.getDocs(fs.query(classScores(fs, db, P.code), fs.orderBy('score', 'desc'), fs.limit(CLASS_MAX))))).docs.map(d => d.data());
     else {   // World: the best runs of each game; rows carry only the student's name (nick), never a class code
       const snaps = await withTimeout(Promise.all(GAMES.map(g => fs.getDocs(fs.query(worldRuns(fs, db, g.id), fs.orderBy('score', 'desc'), fs.limit(WORLD_PER_GAME))))));
       B.rows = snaps.flatMap((s, i) => s.docs.map(d => { const r = d.data(); return { name: r.nick, game: GAMES[i].id, score: r.score, acc: r.acc, level: +r.level || r.level, created_at: r.created_at }; }));
