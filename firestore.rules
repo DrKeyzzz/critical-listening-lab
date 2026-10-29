@@ -115,10 +115,13 @@ service cloud.firestore {
 
     // Classes: anyone can look up a code; teachers manage their own.
     match /classes/{code} {
-      allow read: if true;
+      // PRIVACY 2026-10-26: anyone may check one code exists (get); only the admin, or a teacher
+      // listing their own classes, may list. Nobody can pull every class code.
+      allow get: if true;
+      allow list: if isAdmin() || (isTeacher() && resource.data.ownerEmail == request.auth.token.email);
 
       allow create: if isTeacher()
-        && code.matches('^[A-Z0-9]{4,7}$')   // random 5-character codes, or a teacher's own 4–7 character code
+        && code.matches('^[A-Z0-9]{6,7}$')   // PRIVACY 2026-10-26: new codes are 6–7 characters (random 6, or a teacher's own); older 4–5 character codes keep working
         && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment'])
         && request.resource.data.ownerEmail == request.auth.token.email
         && request.resource.data.name is string
@@ -158,7 +161,7 @@ service cloud.firestore {
 
     // Scores: anyone can see them and add one in the right shape; nobody can edit them.
     match /rhythm_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
 
       allow create: if request.resource.data.keys().hasOnly(['name', 'level', 'class_code', 'score', 'correct', 'total', 'extra_listens', 'time_sec', 'created_at', 'dev', 'icon', 'class_codes'])
         && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data)
@@ -189,7 +192,7 @@ service cloud.firestore {
     // ================= Scale Quest =================
     // CHAOS scores: anyone can see them and add a finished 20-question run; nobody can edit them.
     match /scale_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -197,7 +200,7 @@ service cloud.firestore {
 
     // Scale Quest SCALE DEGREES CHAOS runs: same shape as scale_scores, on their own board.
     match /degree_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -205,7 +208,7 @@ service cloud.firestore {
 
     // Scale Quest KEY SIGNATURES CHAOS runs: same shape as scale_scores, on their own board.
     match /key_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -253,7 +256,7 @@ service cloud.firestore {
 
     // SUPERNOVA runs (all 150 scales, 20 questions, 2 hearts). Anyone can see them; a run is added once, never edited.
     match /nova_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if novaScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -279,7 +282,7 @@ service cloud.firestore {
     // ================= Tidal Tones =================
     // Leaderboard runs: anyone can see them and add one in the right shape; nobody can edit them.
     match /tidal_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if tidalScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -356,7 +359,7 @@ service cloud.firestore {
     // Critical Listening Lab leaderboard: one row per finished 10-round session (Beat Recreate: 6).
     // Anyone can see them and add one in the right shape; nobody can edit them.
     match /listening_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if listenScore(request.resource.data) && devOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
@@ -394,7 +397,7 @@ service cloud.firestore {
     // ================= Rooftop Sight-Reading Runner =================
     // Leaderboard runs: anyone can see them and add one in the right shape; nobody can edit them.
     match /sight_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if sightScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -441,7 +444,8 @@ service cloud.firestore {
     // ================= Brainwaves progress (Synapse, Intervals, Pick a Voice) =================
     // Which levels a student has finished, so their progress follows them to any computer. Document ID = class code (or 'none') + '_' + first name and initial.
     match /earbrain_progress/{docId} {
-      allow read: if true;
+      allow get: if true;            // PRIVACY 2026-10-29: a game reads its own doc by ID; nobody can list everyone's
+      allow list: if isAdmin();
       allow create, update: if docId.size() <= 60 && earbrainProgress(request.resource.data);
       allow delete: if isAdmin();
     }
@@ -463,7 +467,7 @@ service cloud.firestore {
     // ================= Synapse =================
     // Leaderboard runs: anyone can see them and add one in the right shape; nobody can edit them.
     match /synapse_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if synapseScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -486,7 +490,7 @@ service cloud.firestore {
 
     // ================= Brainwaves: Intervals =================
     match /intervals_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if intervalsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -508,7 +512,7 @@ service cloud.firestore {
 
     // ================= Brainwaves: Chord Colors =================
     match /chords_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if chordsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -530,7 +534,7 @@ service cloud.firestore {
 
     // ================= Brainwaves: Progressions =================
     match /progressions_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if progressionsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -552,7 +556,7 @@ service cloud.firestore {
 
     // ================= Brainwaves: Scales and modes =================
     match /scales_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if scalesScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -575,7 +579,7 @@ service cloud.firestore {
     // ================= Brainwaves: Perfect Pitch (added 2026-10-26) =================
     // A finished run: score, rounds, deepest level (1-9; level 9 is Ultimate, with the Distractors), accuracy %, best streak.
     match /pitch_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if pitchScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -597,7 +601,7 @@ service cloud.firestore {
     // ================= Earshot Saloon =================
     // Leaderboard runs: anyone can see them and add one in the right shape; nobody can edit them.
     match /earshot_scores/{scoreId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if earshotScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if devRename();
       allow delete: if isAdmin() || ownsAnyClass(resource.data);
@@ -623,7 +627,8 @@ service cloud.firestore {
     // Wanted posters: each signed-in student's lassoed outlaws, saved online so the poster wall
     // follows them to any computer. Document ID = class code (or 'none') + '_' + first name and initial.
     match /earshot_posters/{docId} {
-      allow read: if true;
+      allow get: if true;            // PRIVACY 2026-10-29: read by ID only; no listing
+      allow list: if isAdmin();
       allow create, update: if earshotPosters(docId, request.resource.data)
         && (!request.resource.data.name.lower().matches('maestro.*') || isAdmin());   // only the developer can be Maestro
       allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
@@ -707,7 +712,7 @@ service cloud.firestore {
         && (!d.name.lower().matches('maestro.*') || isAdmin())   // only the developer can be Maestro
         && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
         && d.class_code is string
-        && ((d.class_code == '' && docId == 'none_' + d.sid)
+        && ((d.class_code == '' && (docId == 'none_' + d.sid || docId.matches('^w[0-9a-f]{8}_' + d.sid + '$')))
             || (d.class_code != '' && docId == d.class_code + '_' + d.sid
                 && exists(/databases/$(database)/documents/classes/$(d.class_code))))
         && d.total_min is int && d.total_min >= 0
@@ -729,7 +734,7 @@ service cloud.firestore {
     // (the leaderboard). It can only be replaced by a better flight: more right, or as many right with more lives
     // left, or the same with a faster time. Only the admin or the class's teacher can delete one.
     match /genius_scores/{docId} {
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if geniusOk(docId, request.resource.data);
       allow update: if geniusOk(docId, request.resource.data)
         && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
@@ -920,5 +925,193 @@ service cloud.firestore {
         && d.updated_at == request.time;
     }
 
+
+    // ONE TIME MOVE (2026-10-29): the admin may create class copies, World runs and practice rows with their original dates
+    // and totals (the dashboard's "Move old scores" button). Everyone else goes through the checks below.
+    match /classes/{code}/{col}/{docId} {
+      allow create: if isAdmin() && col in ['rhythm_scores', 'scale_scores', 'degree_scores', 'key_scores', 'nova_scores', 'tidal_scores',
+        'listening_scores', 'sight_scores', 'synapse_scores', 'intervals_scores', 'chords_scores', 'progressions_scores', 'scales_scores',
+        'pitch_scores', 'earshot_scores', 'genius_scores', 'practice_time'];
+      allow update: if isAdmin() && col == 'practice_time';   // adds old minutes to a row started since the publish
+    }
+    match /world_scores/{game}/runs/{scoreId} {
+      allow create: if isAdmin();
+    }
+    match /practice_time/{docId} {
+      allow create, update: if isAdmin() && (docId.matches('^none_[a-z]{2,16}$') || docId.matches('^w[0-9a-f]{8}_[a-z]{2,16}$'));
+    }
+
+    // ================= PRIVACY 2026-10-26: class locked copies =================
+    // Every score (and practice time) is also written inside its class: classes/{code}/<collection>/{id}.
+    // Reading needs the class code; there is NO collection group rule, so nobody can read across classes.
+    // Same field checks as the old top level collections, plus class_code must match the path.
+    // After the migration the old top level collections become admin only, then are deleted.
+    match /classes/{code}/rhythm_scores/{scoreId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.get('class_code', '') == code && request.resource.data.keys().hasOnly(['name', 'level', 'class_code', 'score', 'correct', 'total', 'extra_listens', 'time_sec', 'created_at', 'dev', 'icon', 'class_codes'])
+        && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 24
+        && request.resource.data.level in ['beginner', 'beginner16', 'easy', 'hard', 'extreme']
+        && request.resource.data.get('class_code', '') is string
+        && (request.resource.data.get('class_code', '') == ''
+            || exists(/databases/$(database)/documents/classes/$(request.resource.data.class_code)))
+        && request.resource.data.score is number
+        && request.resource.data.score >= 0 && request.resource.data.score <= 100
+        && request.resource.data.correct is int && request.resource.data.total is int
+        && request.resource.data.correct >= 0 && request.resource.data.correct <= request.resource.data.total
+        && request.resource.data.total >= 1 && request.resource.data.total <= 200
+        && request.resource.data.extra_listens is int
+        && request.resource.data.extra_listens >= 0 && request.resource.data.extra_listens <= 100
+        && request.resource.data.time_sec is int
+        && request.resource.data.time_sec >= 1 && request.resource.data.time_sec <= 36000
+        && request.resource.data.created_at == request.time;
+
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+
+      // The admin can delete any score; a teacher can delete scores in their own classes.
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/scale_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/degree_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/key_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && scaleScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/nova_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && novaScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/tidal_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && tidalScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/listening_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && listenScore(request.resource.data) && devOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
+    }
+
+    match /classes/{code}/sight_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && sightScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/synapse_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && synapseScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/intervals_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && intervalsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/chords_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && chordsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/progressions_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && progressionsScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/scales_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && scalesScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/pitch_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && pitchScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/earshot_scores/{scoreId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && earshotScore(request.resource.data) && devOk(request.resource.data) && iconOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && devRename();
+      allow delete: if isAdmin() || ownsClass(code);
+    }
+
+    match /classes/{code}/practice_time/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && practiceOk(docId, request.resource.data)
+        && request.resource.data.total_min <= 30
+        && request.resource.data.week_min <= 30 && request.resource.data.day_min <= 30;
+      allow update: if request.resource.data.get('class_code', '') == code && practiceOk(docId, request.resource.data)
+        && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
+        && request.resource.data.total_min >= resource.data.total_min
+        && request.resource.data.total_min <= resource.data.total_min + 30
+        && periodOk(request.resource.data.week, request.resource.data.week_min, resource.data.week, resource.data.week_min)
+        && periodOk(request.resource.data.day, request.resource.data.day_min, resource.data.day, resource.data.day_min);
+      allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
+    }
+
+    match /classes/{code}/genius_scores/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.get('class_code', '') == code && geniusOk(docId, request.resource.data);
+      allow update: if request.resource.data.get('class_code', '') == code && geniusOk(docId, request.resource.data)
+        && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
+        && geniusBetter(request.resource.data, resource.data);
+      allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
+    }
+
+    // ================= PRIVACY 2026-10-26: anonymous World board =================
+    // world_scores/<game>/runs/<id>: the student's first name and last initial (field `nick`, like "Kayden W."), icon, level,
+    // score and accuracy. No class code. The game is in the path, so "orderBy score" needs no extra index.
+    // (David, 2026-10-29: real names on the World board, no random game names.) "Maestro" is the developer's and is refused here.
+    match /world_scores/{game}/runs/{scoreId} {
+      allow read: if true;
+      allow create: if game.matches('^[a-z0-9_]{2,24}$')
+        && request.resource.data.keys().hasOnly(['level', 'score', 'acc', 'icon', 'nick', 'created_at'])
+        && (!('acc' in request.resource.data) || (request.resource.data.acc is int && request.resource.data.acc >= 0 && request.resource.data.acc <= 100))
+        && request.resource.data.level is string && request.resource.data.level.size() <= 24
+        && request.resource.data.score is number && request.resource.data.score >= 0 && request.resource.data.score <= 100000000
+        && request.resource.data.nick is string && request.resource.data.nick.size() >= 2 && request.resource.data.nick.size() <= 24
+        && !request.resource.data.nick.lower().matches('maestro.*')
+        && iconOk(request.resource.data)
+        && request.resource.data.created_at == request.time;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
   }
 }
