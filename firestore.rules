@@ -728,21 +728,47 @@ service cloud.firestore {
     }
 
 
-    // ================= Activity log (added 2026-11-01) =================
-    // activity/<random id>: one record each time a game is opened (sent once per game per browser tab, after 20 s)
-    // { name ('Guest' or first name + last initial), sid ('' for guests), class_code (active class or ''), game, device, at }.
-    // Anyone can add one (guests too, no sign-in); only the admin can read them (dashboard Activity tab) or delete them.
+    // ================= Activity log (added 2026-11-01; time and progress 2026-11-02) =================
+    // activity/<random id>: one record each time a game is opened (created once per game per browser tab, after 20 s)
+    // { name ('Guest' or first name + last initial), sid ('' for guests), class_code (active class or ''), game, device, at,
+    //   answers, correct, rounds, best, level, page_s, play_s, seen }. The visit's page updates only the counters and seen
+    //   (every 3 min and when it closes): they can only go up, by sensible amounts. Anyone can add or update one (guests
+    //   too, no sign-in); only the admin can read them (dashboard Activity tab) or delete them.
+    function actCountsOk(d) {
+      return d.answers is int && d.answers >= 0 && d.answers <= 100000
+        && d.correct is int && d.correct >= 0 && d.correct <= d.answers
+        && d.rounds is int && d.rounds >= 0 && d.rounds <= 10000
+        && d.best is int && d.best >= 0 && d.best <= 1000000000
+        && d.level is int && d.level >= 0 && d.level <= 10000
+        && d.page_s is int && d.page_s >= 0 && d.page_s <= 86400
+        && d.play_s is int && d.play_s >= 0 && d.play_s <= 86400;
+    }
     match /activity/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['name', 'sid', 'class_code', 'game', 'device', 'at'])
-        && request.resource.data.keys().hasAll(['name', 'sid', 'class_code', 'game', 'device', 'at'])
+      allow create: if request.resource.data.keys().hasOnly(['name', 'sid', 'class_code', 'game', 'device', 'at', 'seen',
+            'answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s'])
+        && request.resource.data.keys().hasAll(['name', 'sid', 'class_code', 'game', 'device', 'at', 'seen',
+            'answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s'])
         && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 24
         && request.resource.data.sid is string && request.resource.data.sid.matches('^[a-z]{0,16}$')
         && request.resource.data.class_code is string && request.resource.data.class_code.size() <= 20
         && request.resource.data.game in ['tidal', 'rooftop', 'rhythm', 'scale', 'earshot', 'brainwaves', 'listen', 'genius']
         && request.resource.data.device is string && request.resource.data.device.size() <= 40
-        && request.resource.data.at == request.time;
+        && request.resource.data.at == request.time && request.resource.data.seen == request.time
+        && actCountsOk(request.resource.data)
+        && request.resource.data.page_s <= 600 && request.resource.data.answers <= 1000;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s', 'seen'])
+        && 'page_s' in resource.data && actCountsOk(request.resource.data)
+        && request.resource.data.seen == request.time
+        && request.resource.data.answers >= resource.data.answers && request.resource.data.answers <= resource.data.answers + 5000
+        && request.resource.data.correct >= resource.data.correct
+        && request.resource.data.rounds >= resource.data.rounds
+        && request.resource.data.best >= resource.data.best && request.resource.data.level >= resource.data.level
+        && request.resource.data.page_s >= resource.data.page_s && request.resource.data.page_s <= resource.data.page_s + 3600
+        && request.resource.data.play_s >= resource.data.play_s && request.resource.data.play_s <= resource.data.play_s + 3600;
       allow read, delete: if isAdmin();
     }
+
 
     // ================= Music Theory Super Genius leaderboard (added 2026-10-22) =================
     // One document per student per class: genius_scores/<class code or 'none'>_<sid>, the student's best flight
