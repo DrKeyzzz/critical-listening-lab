@@ -728,6 +728,22 @@ service cloud.firestore {
     }
 
 
+    // ================= Activity log (added 2026-11-01) =================
+    // activity/<random id>: one record each time a game is opened (sent once per game per browser tab, after 20 s)
+    // { name ('Guest' or first name + last initial), sid ('' for guests), class_code (active class or ''), game, device, at }.
+    // Anyone can add one (guests too, no sign-in); only the admin can read them (dashboard Activity tab) or delete them.
+    match /activity/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['name', 'sid', 'class_code', 'game', 'device', 'at'])
+        && request.resource.data.keys().hasAll(['name', 'sid', 'class_code', 'game', 'device', 'at'])
+        && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 24
+        && request.resource.data.sid is string && request.resource.data.sid.matches('^[a-z]{0,16}$')
+        && request.resource.data.class_code is string && request.resource.data.class_code.size() <= 20
+        && request.resource.data.game in ['tidal', 'rooftop', 'rhythm', 'scale', 'earshot', 'brainwaves', 'listen', 'genius']
+        && request.resource.data.device is string && request.resource.data.device.size() <= 40
+        && request.resource.data.at == request.time;
+      allow read, delete: if isAdmin();
+    }
+
     // ================= Music Theory Super Genius leaderboard (added 2026-10-22) =================
     // One document per student per class: genius_scores/<class code or 'none'>_<sid>, the student's best flight
     // (correct = right answers 0-20, lives left 0-3, flight time in ms, rank = ranks earned 0-3). Anyone can read it
