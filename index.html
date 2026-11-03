@@ -3479,7 +3479,8 @@ draw();
    or Guest), the active class code, the game, the device (phone / tablet / computer, system, browser, window width) and
    the server time. While the visit goes on it keeps a tally from the game's 'mtghist' events (sent by MTG_HIST.note/run,
    guests too): answers, correct, rounds, best score, furthest level, seconds on screen and seconds playing (gaps between
-   answers under 2 minutes). It updates the same record every 3 minutes when something changed and once when the page is
+   answers under 2 minutes) and the parts played (Brainwaves areas: the game id each answer was saved under, when it
+   isn't the page's own id). It updates the same record every 3 minutes when something changed and once when the page is
    hidden or closed. Nobody can read the records except the admin (dashboard Activity tab). No sign-in, no SDK: REST calls.
    On localhost it sends nothing unless the address has ?activity=1. */
 (function(){
@@ -3493,10 +3494,12 @@ draw();
 
   // ---------- the tally for this visit ----------
   var T = { answers: 0, correct: 0, rounds: 0, best: 0, level: 0 }, playMs = 0, lastAns = 0, pageMs = 0, visSince = document.hidden ? 0 : Date.now();
+  var PARTS = [];   // parts of the game played this visit (Brainwaves areas), in the order first played
   var id = '', sent = '';   // the record's id once created; the counters last sent
   function pageS(){ return Math.round((pageMs + (visSince ? Date.now() - visSince : 0)) / 1000); }
   addEventListener('mtghist', function(e){
     var d = e.detail || {};
+    if (d.game && d.game !== GAME && PARTS.indexOf(String(d.game)) < 0) PARTS.push(String(d.game).slice(0, 20));
     if (d.type === 'note') {
       var now = Date.now();
       if (lastAns && now - lastAns < 120000) playMs += now - lastAns;   // a pause over 2 minutes isn't playing
@@ -3535,6 +3538,7 @@ draw();
 
   // ---------- sending ----------
   function ints(c){ var f = {}; for (var k in c) f[k] = { integerValue: String(c[k]) }; return f; }
+  function parts(){ return PARTS.join(',').slice(0, 120); }
   function commit(write, done){
     try {
       fetch('https://firestore.googleapis.com/v1/' + DOCS + ':commit?key=' + KEY, {
@@ -3550,16 +3554,18 @@ draw();
     fields.class_code = { stringValue: p ? activeCode(p) : '' };
     fields.game = { stringValue: GAME };
     fields.device = { stringValue: device() };
-    var snap = JSON.stringify(c);
+    fields.parts = { stringValue: parts() };
+    var snap = JSON.stringify(c) + parts();
     commit({ update: { name: DOCS + '/activity/' + newId, fields: fields },
       updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }, { fieldPath: 'seen', setToServerValue: 'REQUEST_TIME' }],
       currentDocument: { exists: false } }, function(){ id = newId; sent = snap; });
   }
   function update(){
     if (!id) return;
-    var c = counters(), snap = JSON.stringify(c);
+    var c = counters(), snap = JSON.stringify(c) + parts(), f = ints(c);
     if (snap === sent) return;
-    commit({ update: { name: DOCS + '/activity/' + id, fields: ints(c) }, updateMask: { fieldPaths: Object.keys(c) },
+    f.parts = { stringValue: parts() };
+    commit({ update: { name: DOCS + '/activity/' + id, fields: f }, updateMask: { fieldPaths: Object.keys(f) },
       updateTransforms: [{ fieldPath: 'seen', setToServerValue: 'REQUEST_TIME' }], currentDocument: { exists: true } }, function(){ sent = snap; });
   }
   document.addEventListener('visibilitychange', function(){

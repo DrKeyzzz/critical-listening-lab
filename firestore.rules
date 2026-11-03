@@ -731,7 +731,8 @@ service cloud.firestore {
     // ================= Activity log (added 2026-11-01; time and progress 2026-11-02) =================
     // activity/<random id>: one record each time a game is opened (created once per game per browser tab, after 20 s)
     // { name ('Guest' or first name + last initial), sid ('' for guests), class_code (active class or ''), game, device, at,
-    //   answers, correct, rounds, best, level, page_s, play_s, seen }. The visit's page updates only the counters and seen
+    //   answers, correct, rounds, best, level, page_s, play_s, seen, parts (optional, added 2026-11-03: the Brainwaves areas
+    //   played, ids joined by commas) }. The visit's page updates only the counters, parts and seen
     //   (every 3 min and when it closes): they can only go up, by sensible amounts. Anyone can add or update one (guests
     //   too, no sign-in); only the admin can read them (dashboard Activity tab) or delete them.
     function actCountsOk(d) {
@@ -743,9 +744,12 @@ service cloud.firestore {
         && d.page_s is int && d.page_s >= 0 && d.page_s <= 86400
         && d.play_s is int && d.play_s >= 0 && d.play_s <= 86400;
     }
+    function actPartsOk(d) {
+      return !('parts' in d) || (d.parts is string && d.parts.size() <= 120);
+    }
     match /activity/{id} {
       allow create: if request.resource.data.keys().hasOnly(['name', 'sid', 'class_code', 'game', 'device', 'at', 'seen',
-            'answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s'])
+            'answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s', 'parts'])
         && request.resource.data.keys().hasAll(['name', 'sid', 'class_code', 'game', 'device', 'at', 'seen',
             'answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s'])
         && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 24
@@ -754,11 +758,11 @@ service cloud.firestore {
         && request.resource.data.game in ['tidal', 'rooftop', 'rhythm', 'scale', 'earshot', 'brainwaves', 'listen', 'genius']
         && request.resource.data.device is string && request.resource.data.device.size() <= 40
         && request.resource.data.at == request.time && request.resource.data.seen == request.time
-        && actCountsOk(request.resource.data)
+        && actCountsOk(request.resource.data) && actPartsOk(request.resource.data)
         && request.resource.data.page_s <= 600 && request.resource.data.answers <= 1000;
       allow update: if request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s', 'seen'])
-        && 'page_s' in resource.data && actCountsOk(request.resource.data)
+            .hasOnly(['answers', 'correct', 'rounds', 'best', 'level', 'page_s', 'play_s', 'seen', 'parts'])
+        && 'page_s' in resource.data && actCountsOk(request.resource.data) && actPartsOk(request.resource.data)
         && request.resource.data.seen == request.time
         && request.resource.data.answers >= resource.data.answers && request.resource.data.answers <= resource.data.answers + 5000
         && request.resource.data.correct >= resource.data.correct
