@@ -139,6 +139,16 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isTeacher() && resource.data.ownerEmail == request.auth.token.email);
     }
 
+    // Ended assignment grade rows are private, unlike the parent class document.
+    match /classes/{code}/assignment_grades/{assignmentId} {
+      allow get: if ownsClass(code);
+      allow create: if ownsClass(code)
+        && request.resource.data.keys().hasOnly(['tasks', 'rows'])
+        && request.resource.data.tasks is list
+        && request.resource.data.rows is list;
+      allow delete: if ownsClass(code);
+    }
+
     // Practice progress: one summary per student per day. Students write their own;
     // only the class's teacher (or the admin) can read it.
     match /progress/{docId} {
