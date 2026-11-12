@@ -122,7 +122,8 @@ service cloud.firestore {
 
       allow create: if isTeacher()
         && code.matches('^[A-Z0-9]{6,7}$')   // PRIVACY 2026-10-26: new codes are 6–7 characters (random 6, or a teacher's own); older 4–5 character codes keep working
-        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment'])
+        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment', 'skills', 'bc_goal'])
+        && bcClassFieldsOk(request.resource.data)
         && request.resource.data.ownerEmail == request.auth.token.email
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
@@ -130,7 +131,8 @@ service cloud.firestore {
 
       allow update: if isTeacher()
         && resource.data.ownerEmail == request.auth.token.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment', 'skills', 'bc_goal'])
+        && bcClassFieldsOk(request.resource.data)
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40;
 
@@ -1158,6 +1160,119 @@ service cloud.firestore {
         && request.resource.data.created_at == request.time;
       allow update: if false;
       allow delete: if isAdmin();
+    }
+    // ================= Live Class (classroom backchannel, added 2026-11-12; plan: BACKCHANNEL-PLAN.md) =================
+    // Students have no sign-in, so privacy comes from what each kind of record allows:
+    //  - bc_live/<class code>: the class's live screen (question, open or locked, timer, and the spotlight the teacher chose to
+    //    share). Anyone may get it (a student needs the class code); only the class's teacher writes it.
+    //  - bc_live/<code>/reacts/<round>_<sid>: one emoji per student on the spotlight; anyone can read the counts.
+    //  - bc_answers/<random id>: one answer. Anyone may ADD one, only while that question is open (checked); nobody can change
+    //    it except the teacher's mark; only the class's teacher or the admin can read, list or delete. Classmates never read answers.
+    //  - bc_pulse/<key>: one per student device ("I'm lost", confidence 1-5). key = a random 20-character code made by the
+    //    student's browser and kept on that device. Only the class's teacher or the admin reads it.
+    //  - bc_private/<random id>: a private question to the teacher; add only; the teacher may mark it done.
+    //  - bc_reports/<key>: a released report card. Get by its exact key only (only the student's device has it); only the
+    //    class's teacher can list them. The admin's dashboard deletes answers, pulses, private questions and reactions after 90 days.
+    function bcClassFieldsOk(d) {
+      return (!('skills' in d) || (d.skills is list && d.skills.size() <= 20))
+        && (!('bc_goal' in d) || d.bc_goal is map);
+    }
+    function bcClassOk(d) {
+      return d.class_code is string && d.class_code.size() >= 4 && d.class_code.size() <= 7
+        && exists(/databases/$(database)/documents/classes/$(d.class_code))
+        && d.owner is string && d.owner == get(/databases/$(database)/documents/classes/$(d.class_code)).data.ownerEmail;
+    }
+    function bcNameOk(d) {
+      return d.sid is string && d.sid.matches('^[a-z]{2,16}$')
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 24
+        && !d.name.lower().matches('maestro.*');
+    }
+    function bcKeyOk(k) {
+      return k is string && k.matches('^[a-z0-9]{20}$');
+    }
+    function bcMine(r) {
+      return isAdmin() || (isTeacher() && r.data.owner == request.auth.token.email);
+    }
+    function bcLive(code) {
+      return get(/databases/$(database)/documents/bc_live/$(code)).data;
+    }
+    match /bc_live/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if ownsClass(code)
+        && request.resource.data.keys().hasOnly(['round', 'q', 'type', 'opts', 'skills', 'open', 'ends_at', 'spot', 'updated_at'])
+        && request.resource.data.round is string && request.resource.data.round.matches('^[A-Za-z0-9-]{1,40}$')
+        && request.resource.data.q is string && request.resource.data.q.size() <= 200
+        && request.resource.data.type in ['text', 'mc', 'yn', 'num', 'emoji', 'word']
+        && request.resource.data.open is bool
+        && (!('opts' in request.resource.data) || (request.resource.data.opts is list && request.resource.data.opts.size() <= 6))
+        && (!('skills' in request.resource.data) || (request.resource.data.skills is list && request.resource.data.skills.size() <= 20))
+        && (!('ends_at' in request.resource.data) || request.resource.data.ends_at == null || request.resource.data.ends_at is timestamp)
+        && (!('spot' in request.resource.data) || (request.resource.data.spot is list && request.resource.data.spot.size() <= 2))
+        && request.resource.data.updated_at == request.time;
+      allow delete: if isAdmin() || ownsClass(code);
+
+      match /reacts/{id} {
+        allow read: if true;
+        allow create, update: if request.resource.data.keys().hasOnly(['round', 'to', 'e', 'at'])
+          && request.resource.data.round is string && request.resource.data.round.matches('^[A-Za-z0-9-]{1,40}$')
+          && id.matches(request.resource.data.round + '_[a-z]{2,16}')
+          && request.resource.data.to is int && request.resource.data.to >= 0 && request.resource.data.to <= 1
+          && request.resource.data.e in ['👍', '🤯', '😂', '💡']
+          && request.resource.data.at == request.time;
+        allow delete: if isAdmin() || ownsClass(code);
+      }
+    }
+    match /bc_answers/{id} {
+      allow read: if bcMine(resource);
+      allow create: if request.resource.data.keys().hasOnly(['round', 'class_code', 'owner', 'sid', 'name', 'key', 'type', 'text', 'flag', 'avatar', 'at'])
+        && request.resource.data.keys().hasAll(['round', 'class_code', 'owner', 'sid', 'name', 'key', 'type', 'text', 'at'])
+        && bcClassOk(request.resource.data) && bcNameOk(request.resource.data) && bcKeyOk(request.resource.data.key)
+        && request.resource.data.type in ['text', 'mc', 'yn', 'num', 'emoji', 'word']
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 280
+        && (!('flag' in request.resource.data) || request.resource.data.flag is bool)
+        && (!('avatar' in request.resource.data) || (request.resource.data.avatar is string && request.resource.data.avatar.size() <= 200))
+        && bcLive(request.resource.data.class_code).open == true
+        && bcLive(request.resource.data.class_code).round == request.resource.data.round
+        && request.resource.data.at == request.time;
+      allow update: if bcMine(resource)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mark'])
+        && request.resource.data.mark in [0, 0.5, 1];
+      allow delete: if bcMine(resource);
+    }
+    match /bc_pulse/{key} {
+      allow read, delete: if bcMine(resource);
+      allow create, update: if bcKeyOk(key)
+        && request.resource.data.keys().hasOnly(['class_code', 'owner', 'sid', 'name', 'lost', 'conf', 'at'])
+        && request.resource.data.keys().hasAll(['class_code', 'owner', 'sid', 'name', 'lost', 'conf', 'at'])
+        && bcClassOk(request.resource.data) && bcNameOk(request.resource.data)
+        && request.resource.data.lost is bool
+        && request.resource.data.conf is int && request.resource.data.conf >= 1 && request.resource.data.conf <= 5
+        && request.resource.data.at == request.time;
+    }
+    match /bc_private/{id} {
+      allow read, delete: if bcMine(resource);
+      allow create: if request.resource.data.keys().hasOnly(['class_code', 'owner', 'sid', 'name', 'key', 'text', 'at'])
+        && request.resource.data.keys().hasAll(['class_code', 'owner', 'sid', 'name', 'key', 'text', 'at'])
+        && bcClassOk(request.resource.data) && bcNameOk(request.resource.data) && bcKeyOk(request.resource.data.key)
+        && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 280
+        && request.resource.data.at == request.time;
+      allow update: if bcMine(resource)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done'])
+        && request.resource.data.done is bool;
+    }
+    match /bc_reports/{key} {
+      allow get: if true;   // only the student's device knows the key
+      allow list: if bcMine(resource);
+      allow create, update: if bcKeyOk(key) && ownsClass(request.resource.data.class_code)
+        && request.resource.data.owner == request.auth.token.email
+        && request.resource.data.keys().hasOnly(['class_code', 'owner', 'sid', 'name', 'date', 'level', 'skills', 'comment', 'prev', 'released_at'])
+        && bcNameOk(request.resource.data)
+        && request.resource.data.skills is list && request.resource.data.skills.size() <= 20
+        && (!('comment' in request.resource.data) || (request.resource.data.comment is string && request.resource.data.comment.size() <= 300))
+        && (!('prev' in request.resource.data) || request.resource.data.prev is list)
+        && request.resource.data.released_at == request.time;
+      allow delete: if bcMine(resource);
     }
   }
 }
