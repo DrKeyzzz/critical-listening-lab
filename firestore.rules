@@ -750,7 +750,8 @@ service cloud.firestore {
     // and two counters); the student's device writes it (same honest limit as practice_time: no sign-in). Coins and points arrive
     // as increments: at most +30 coins and +600 points per write, and 60 coins a day. Going down is allowed (the Store spends them).
     function avatarOk(docId, d) {
-      return d.keys().hasOnly(['look', 'sid', 'coins', 'points', 'coin_day', 'coins_today', 'owned', 'updated_at'])
+      return d.keys().hasOnly(['look', 'sid', 'coins', 'points', 'coin_day', 'coins_today', 'owned', 'encores', 'encore_xp', 'updated_at'])
+        && d.get('encores', 0) is int && d.get('encores', 0) >= 0 && d.get('encores', 0) <= 99 && d.get('encore_xp', 0) is int && d.get('encore_xp', 0) >= 0
         && d.get('owned', []) is list && d.get('owned', []).size() <= 300
         && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
         && docId.matches('^[A-Za-z0-9]{1,20}_' + d.sid + '$')
@@ -764,11 +765,12 @@ service cloud.firestore {
     match /avatars/{docId} {
       allow get: if true;
       allow create: if avatarOk(docId, request.resource.data)
-        && request.resource.data.get('coins', 0) <= 30 && request.resource.data.get('points', 0) <= 600;
+        && request.resource.data.get('coins', 0) <= 30 && request.resource.data.get('points', 0) <= 600 && request.resource.data.get('encores', 0) <= 1;
       allow update: if avatarOk(docId, request.resource.data)
         && request.resource.data.sid == resource.data.sid
         && request.resource.data.get('coins', 0) <= resource.data.get('coins', 0) + 30
-        && request.resource.data.get('points', 0) <= resource.data.get('points', 0) + 600;
+        && request.resource.data.get('points', 0) <= resource.data.get('points', 0) + 600
+        && request.resource.data.get('encores', 0) <= resource.data.get('encores', 0) + 1;   // one Encore at a time
       allow delete: if isAdmin();
     }
 
