@@ -122,7 +122,7 @@ service cloud.firestore {
 
       allow create: if isTeacher()
         && code.matches('^[A-Z0-9]{6,7}$')   // PRIVACY 2026-10-26: new codes are 6–7 characters (random 6, or a teacher's own); older 4–5 character codes keep working
-        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment', 'skills', 'bc_goal'])
+        && request.resource.data.keys().hasOnly(['name', 'ownerEmail', 'created_at', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment', 'skills', 'bc_goal', 'sm_on', 'sm_blocked'])
         && bcClassFieldsOk(request.resource.data)
         && request.resource.data.ownerEmail == request.auth.token.email
         && request.resource.data.name is string
@@ -131,8 +131,10 @@ service cloud.firestore {
 
       allow update: if isTeacher()
         && resource.data.ownerEmail == request.auth.token.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment', 'skills', 'bc_goal'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'assignment', 'scale_assignment', 'tidal_assignment', 'rooftop_assignment', 'hub_assignment', 'hub_assignments', 'grade_out_of', 'listen_assignment', 'skills', 'bc_goal', 'sm_on', 'sm_blocked'])
         && bcClassFieldsOk(request.resource.data)
+        && (!('sm_on' in request.resource.data) || request.resource.data.sm_on is bool)
+        && (!('sm_blocked' in request.resource.data) || (request.resource.data.sm_blocked is list && request.resource.data.sm_blocked.size() <= 200))
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40;
 
@@ -1286,6 +1288,62 @@ service cloud.firestore {
         && (!('prev' in request.resource.data) || request.resource.data.prev is list)
         && request.resource.data.released_at == request.time;
       allow delete: if bcMine(resource);
+    }
+    // ================= Message my teacher (added 2026-11-16) =================
+    // sm_threads/<device key>_<class code> = { class_code, owner, sid, name, key, created_at, last_at, last_from 'student'|'teacher',
+    //   last_text (<=120), unread_teacher, unread_student }: one conversation between a student's device and their teacher.
+    //   The id starts with a random 20-character key that only the student's device knows (the same idea as bc_reports), so a get
+    //   by id is open; only the class's teacher and the admin can list. + msgs/<id> = { from, text 1-300, at }.
+    // A student can write only while their class has sm_on == true and their sid is not in sm_blocked. Teachers only reply
+    // (every conversation starts with the student). The admin's dashboard deletes conversations older than 90 days.
+    function smOpen(code, sid) {
+      let c = get(/databases/$(database)/documents/classes/$(code)).data;
+      return c.get('sm_on', false) == true && !(sid in c.get('sm_blocked', []));
+    }
+    function smTextOk(t, n) {
+      return t is string && t.size() >= 1 && t.size() <= n;
+    }
+    match /sm_threads/{id} {
+      allow get: if true;
+      allow list: if bcMine(resource);
+      allow create: if request.resource.data.keys().hasOnly(['class_code', 'owner', 'sid', 'name', 'key', 'created_at', 'last_at', 'last_from', 'last_text', 'unread_teacher', 'unread_student'])
+        && request.resource.data.keys().hasAll(['class_code', 'owner', 'sid', 'name', 'key', 'created_at', 'last_at', 'last_from', 'last_text', 'unread_teacher', 'unread_student'])
+        && bcClassOk(request.resource.data) && bcNameOk(request.resource.data) && bcKeyOk(request.resource.data.key)
+        && id == request.resource.data.key + '_' + request.resource.data.class_code
+        && smOpen(request.resource.data.class_code, request.resource.data.sid)
+        && request.resource.data.created_at == request.time && request.resource.data.last_at == request.time
+        && request.resource.data.last_from == 'student' && smTextOk(request.resource.data.last_text, 120)
+        && request.resource.data.unread_teacher == 1 && request.resource.data.unread_student == 0;
+      allow update: if
+        // the student's device sends a message
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_at', 'last_from', 'last_text', 'unread_teacher', 'unread_student'])
+          && request.resource.data.last_from == 'student' && request.resource.data.last_at == request.time
+          && smTextOk(request.resource.data.last_text, 120)
+          && request.resource.data.unread_teacher == resource.data.unread_teacher + 1 && request.resource.data.unread_student == 0
+          && smOpen(resource.data.class_code, resource.data.sid))
+        // the student's device read the teacher's replies
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unread_student']) && request.resource.data.unread_student == 0)
+        // the teacher replies
+        || (bcMine(resource)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_at', 'last_from', 'last_text', 'unread_teacher', 'unread_student'])
+          && request.resource.data.last_from == 'teacher' && request.resource.data.last_at == request.time
+          && smTextOk(request.resource.data.last_text, 120)
+          && request.resource.data.unread_student == resource.data.unread_student + 1 && request.resource.data.unread_teacher == 0)
+        // the teacher read the student's messages
+        || (bcMine(resource) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unread_teacher']) && request.resource.data.unread_teacher == 0);
+      allow delete: if bcMine(resource);
+      match /msgs/{mid} {
+        allow read: if true;   // only someone who knows the thread id can reach these
+        allow create: if request.resource.data.keys().hasOnly(['from', 'text', 'at']) && request.resource.data.keys().hasAll(['from', 'text', 'at'])
+          && smTextOk(request.resource.data.text, 300) && request.resource.data.at == request.time
+          && ((request.resource.data.from == 'student'
+                && getAfter(/databases/$(database)/documents/sm_threads/$(id)).data.last_at == request.time
+                && getAfter(/databases/$(database)/documents/sm_threads/$(id)).data.last_from == 'student')
+            || (request.resource.data.from == 'teacher'
+                && (isAdmin() || (isTeacher() && get(/databases/$(database)/documents/sm_threads/$(id)).data.owner == request.auth.token.email))));
+        allow update: if false;
+        allow delete: if isAdmin() || (isTeacher() && get(/databases/$(database)/documents/sm_threads/$(id)).data.owner == request.auth.token.email);
+      }
     }
   }
 }
