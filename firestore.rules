@@ -782,7 +782,10 @@ service cloud.firestore {
         && request.resource.data.best >= resource.data.best && request.resource.data.level >= resource.data.level
         && request.resource.data.page_s >= resource.data.page_s && request.resource.data.page_s <= resource.data.page_s + 3600
         && request.resource.data.play_s >= resource.data.play_s && request.resource.data.play_s <= resource.data.play_s + 3600;
-      allow read, delete: if isAdmin();
+      // a teacher reads the visits in their own classes (2026-11-16, Activity tab; the dashboard asks one class at a time,
+      // where class_code == <code>, so the rule can check the owner); the admin reads and deletes everything
+      allow read: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
+      allow delete: if isAdmin();
     }
 
 
