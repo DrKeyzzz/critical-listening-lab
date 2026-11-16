@@ -744,17 +744,30 @@ service cloud.firestore {
     }
 
 
-    // ================= Avatars (added 2026-11-16, build step 1) =================
-    // avatars/<active class code or none>_<sid>: one student's avatar look { look: map of slot -> short word or small number
-    // (<= 30 keys), sid, updated_at }. No names. Anyone may read one (it is only a cartoon); the student's device writes it
-    // (same honest limit as practice_time: no sign-in). Later steps add coins and points with their own checks.
+    // ================= Avatars (added 2026-11-16, build step 1; coins and points step 2) =================
+    // avatars/<active class code or none>_<sid>: one student's avatar { look: map of slot -> short word or small number
+    // (<= 30 keys), sid, coins, points, coin_day, coins_today, updated_at }. No names. Anyone may read one (it is only a cartoon
+    // and two counters); the student's device writes it (same honest limit as practice_time: no sign-in). Coins and points arrive
+    // as increments: at most +30 coins and +600 points per write, and 60 coins a day. Going down is allowed (the Store spends them).
+    function avatarOk(docId, d) {
+      return d.keys().hasOnly(['look', 'sid', 'coins', 'points', 'coin_day', 'coins_today', 'updated_at'])
+        && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
+        && docId.matches('^[A-Za-z0-9]{1,20}_' + d.sid + '$')
+        && d.look is map && d.look.size() <= 30
+        && d.get('coins', 0) is int && d.get('coins', 0) >= 0
+        && d.get('points', 0) is int && d.get('points', 0) >= 0
+        && d.get('coins_today', 0) is int && d.get('coins_today', 0) >= 0 && d.get('coins_today', 0) <= 60
+        && d.get('coin_day', '2000-01-01') is string && d.get('coin_day', '2000-01-01').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.updated_at == request.time;
+    }
     match /avatars/{docId} {
       allow get: if true;
-      allow create, update: if request.resource.data.keys().hasOnly(['look', 'sid', 'updated_at'])
-        && request.resource.data.sid is string && request.resource.data.sid.matches('^[a-z]{2,16}$')
-        && docId.matches('^[A-Za-z0-9]{1,20}_' + request.resource.data.sid + '$')
-        && request.resource.data.look is map && request.resource.data.look.size() <= 30
-        && request.resource.data.updated_at == request.time;
+      allow create: if avatarOk(docId, request.resource.data)
+        && request.resource.data.get('coins', 0) <= 30 && request.resource.data.get('points', 0) <= 600;
+      allow update: if avatarOk(docId, request.resource.data)
+        && request.resource.data.sid == resource.data.sid
+        && request.resource.data.get('coins', 0) <= resource.data.get('coins', 0) + 30
+        && request.resource.data.get('points', 0) <= resource.data.get('points', 0) + 600;
       allow delete: if isAdmin();
     }
 
