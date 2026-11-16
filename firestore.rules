@@ -686,7 +686,9 @@ service cloud.firestore {
     }
 
     function feedbackOk(d) {
-      return d.keys().hasOnly(['game', 'text', 'name', 'class_code', 'class_codes', 'owner', 'created_at'])
+      return d.keys().hasOnly(['game', 'text', 'name', 'class_code', 'class_codes', 'owner', 'created_at', 'key', 'sid'])
+        && (!('key' in d) || (d.key is string && d.key.matches('^[a-z0-9]{20}$')))   // device key, so a reply can be private (2026-11-16)
+        && (!('sid' in d) || (d.sid is string && d.sid.matches('^[a-z]{0,16}$')))
         && d.game in ['scale-quest', 'tidal-tones', 'earshot-saloon', 'rhythm-trainer', 'rooftop-runner', 'ear-brain', 'hub', 'critical-listening-lab']
         && d.text is string && d.text.size() >= 3 && d.text.size() <= 300
         && d.name is string && d.name.size() <= 24
@@ -1343,6 +1345,37 @@ service cloud.firestore {
                 && (isAdmin() || (isTeacher() && get(/databases/$(database)/documents/sm_threads/$(id)).data.owner == request.auth.token.email))));
         allow update: if false;
         allow delete: if isAdmin() || (isTeacher() && get(/databases/$(database)/documents/sm_threads/$(id)).data.owner == request.auth.token.email);
+      }
+    }
+    // ================= Replies to feedback (added 2026-11-16) =================
+    // fb_threads/<id>: a conversation between a student and Music Theory Academy (the admin), started by the admin replying to a
+    //   feedback note. id = the student's device key (notes sent since 2026-11-16 carry it) or, for older notes, <class code>_<sid>
+    //   (anyone signed in with that name and class can read it; the admin's reply box warns about that). Get by exact id is open.
+    //   = { name, sid, class_code, note_id, game, created_at, last_at, last_from 'support'|'student', last_text, unread_admin, unread_student }
+    //   + msgs/<id> = { from 'support'|'student', text 1-300, at }.
+    match /fb_threads/{id} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        // the student answers
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_at', 'last_from', 'last_text', 'unread_admin', 'unread_student'])
+          && request.resource.data.last_from == 'student' && request.resource.data.last_at == request.time
+          && smTextOk(request.resource.data.last_text, 120)
+          && request.resource.data.unread_admin == resource.data.unread_admin + 1 && request.resource.data.unread_student == 0)
+        // the student read the replies
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unread_student']) && request.resource.data.unread_student == 0);
+      allow delete: if isAdmin();
+      match /msgs/{mid} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasOnly(['from', 'text', 'at']) && request.resource.data.keys().hasAll(['from', 'text', 'at'])
+          && smTextOk(request.resource.data.text, 300) && request.resource.data.at == request.time
+          && ((request.resource.data.from == 'support' && isAdmin())
+            || (request.resource.data.from == 'student'
+                && getAfter(/databases/$(database)/documents/fb_threads/$(id)).data.last_at == request.time
+                && getAfter(/databases/$(database)/documents/fb_threads/$(id)).data.last_from == 'student'));
+        allow update: if false;
+        allow delete: if isAdmin();
       }
     }
   }
