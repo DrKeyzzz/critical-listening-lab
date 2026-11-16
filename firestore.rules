@@ -744,6 +744,20 @@ service cloud.firestore {
     }
 
 
+    // ================= Avatars (added 2026-11-16, build step 1) =================
+    // avatars/<active class code or none>_<sid>: one student's avatar look { look: map of slot -> short word or small number
+    // (<= 30 keys), sid, updated_at }. No names. Anyone may read one (it is only a cartoon); the student's device writes it
+    // (same honest limit as practice_time: no sign-in). Later steps add coins and points with their own checks.
+    match /avatars/{docId} {
+      allow get: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['look', 'sid', 'updated_at'])
+        && request.resource.data.sid is string && request.resource.data.sid.matches('^[a-z]{2,16}$')
+        && docId.matches('^[A-Za-z0-9]{1,20}_' + request.resource.data.sid + '$')
+        && request.resource.data.look is map && request.resource.data.look.size() <= 30
+        && request.resource.data.updated_at == request.time;
+      allow delete: if isAdmin();
+    }
+
     // ================= Activity log (added 2026-11-01; time and progress 2026-11-02) =================
     // activity/<random id>: one record each time a game is opened (created once per game per browser tab, after 20 s)
     // { name ('Guest' or first name + last initial), sid ('' for guests), class_code (active class or ''), game, device, at,
