@@ -746,11 +746,12 @@ service cloud.firestore {
 
     // ================= Avatars (added 2026-11-16, build step 1; coins and points step 2) =================
     // avatars/<active class code or none>_<sid>: one student's avatar { look: map of slot -> short word or small number
-    // (<= 30 keys), sid, coins, points, coin_day, coins_today, updated_at }. No names. Anyone may read one (it is only a cartoon
+    // (<= 30 keys), sid, coins, points, coin_day, coins_today, owned (Store items, <= 300), updated_at }. No names. Anyone may read one (it is only a cartoon
     // and two counters); the student's device writes it (same honest limit as practice_time: no sign-in). Coins and points arrive
     // as increments: at most +30 coins and +600 points per write, and 60 coins a day. Going down is allowed (the Store spends them).
     function avatarOk(docId, d) {
-      return d.keys().hasOnly(['look', 'sid', 'coins', 'points', 'coin_day', 'coins_today', 'updated_at'])
+      return d.keys().hasOnly(['look', 'sid', 'coins', 'points', 'coin_day', 'coins_today', 'owned', 'updated_at'])
+        && d.get('owned', []) is list && d.get('owned', []).size() <= 300
         && d.sid is string && d.sid.matches('^[a-z]{2,16}$')
         && docId.matches('^[A-Za-z0-9]{1,20}_' + d.sid + '$')
         && d.look is map && d.look.size() <= 30
