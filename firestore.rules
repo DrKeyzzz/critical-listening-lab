@@ -677,10 +677,10 @@ service cloud.firestore {
     // Any student or guest can send one short note from the Feedback button in a game. Nobody can edit it.
     // Only the admin, or the teacher who owns the sender's class, can read or delete it.
     match /game_feedback/{noteId} {
-      allow read: if isAdmin() || (isTeacher() && resource.data.owner == request.auth.token.email);
+      allow read: if isAdmin();   // only the admin reads feedback (David, 2026-11-16); teachers no longer see it
       allow create: if feedbackOk(request.resource.data) && classCodesOk(request.resource.data);
       allow update: if false;
-      allow delete: if isAdmin() || (isTeacher() && resource.data.owner == request.auth.token.email);
+      allow delete: if isAdmin();
     }
 
     function feedbackOk(d) {
