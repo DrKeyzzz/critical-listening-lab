@@ -709,12 +709,15 @@ service cloud.firestore {
     // the Practice Time leaderboard). total_min only goes up, by 0–30 per write; week_min and day_min go up by 0–30, or start
     // over (at most 30) when the week or day changes. Only the admin or the class's teacher can delete one.
     match /practice_time/{docId} {
+      // SECURITY H4 (2026-11-17): the top level holds only World board rows with no class code (classes keep theirs inside the class),
+      // so listing it leaks no class codes. H3: the name never changes and updates are at least 50 s apart (the time box writes once a minute).
       allow read: if true;
-      allow create: if practiceOk(docId, request.resource.data)
+      allow create: if practiceOk(docId, request.resource.data) && request.resource.data.class_code == ''
         && request.resource.data.total_min <= 30
         && request.resource.data.week_min <= 30 && request.resource.data.day_min <= 30;
-      allow update: if practiceOk(docId, request.resource.data)
+      allow update: if practiceOk(docId, request.resource.data) && request.resource.data.class_code == ''
         && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
+        && request.resource.data.name.lower() == resource.data.name.lower() && request.time > resource.data.updated_at + duration.value(50, 's')
         && request.resource.data.total_min >= resource.data.total_min
         && request.resource.data.total_min <= resource.data.total_min + 30
         && periodOk(request.resource.data.week, request.resource.data.week_min, resource.data.week, resource.data.week_min)
@@ -833,7 +836,7 @@ service cloud.firestore {
     match /genius_scores/{docId} {
       allow read: if isAdmin() || resource.data.dev == true;   // OLD list (locked 2026-10-29): only the developer's rows stay public; scores now live in classes/<code>/
       allow create: if geniusOk(docId, request.resource.data);
-      allow update: if geniusOk(docId, request.resource.data)
+      allow update: if geniusOk(docId, request.resource.data) && request.resource.data.name.lower() == resource.data.name.lower()   // SECURITY H3 (2026-11-17)
         && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
         && geniusBetter(request.resource.data, resource.data);
       allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
@@ -963,7 +966,11 @@ service cloud.firestore {
     // A teacher publishes a test for a class (a game, its settings, how it is graded, how many tries).
     // Anyone can read a test (students need it to start). Only the teacher who owns the class can create, change or delete it.
     match /tests/{testId} {
-      allow read: if true;
+      // SECURITY H4 (2026-11-17): a test opens by id for anyone (games, ?test=<id>), but listing needs the class: a query must say
+      // where class_code == <code> (home page, My Report, dashboards, the Lab), so nobody can download every test with its teacher's email.
+      allow get: if true;
+      allow list: if isAdmin() || (resource.data.class_code is string && resource.data.class_code != ''
+        && exists(/databases/$(database)/documents/classes/$(resource.data.class_code)));
       allow create: if ownsClass(request.resource.data.class_code) && testOk(request.resource.data)
         && request.resource.data.owner == request.auth.token.email;
       allow update: if ownsClass(resource.data.class_code) && testOk(request.resource.data)
@@ -994,6 +1001,10 @@ service cloud.firestore {
         && request.resource.data.best_acc == 0 && request.resource.data.best_score == 0;
       allow update: if resultOk(request.resource.data) && resultId == request.resource.data.test + '_' + request.resource.data.sid
         && request.resource.data.test == resource.data.test && request.resource.data.sid == resource.data.sid
+        && request.resource.data.student.lower() == resource.data.student.lower()
+        // SECURITY H1 (2026-11-17): the best is the test's own measure (accuracy, or score for a points test), so best_acc and
+        // best_score can't be set apart from it. The real fix is the device sign-in (step 2): only that device may change it.
+        && request.resource.data.best == (testDoc(request.resource.data.test).grade == 'score' ? request.resource.data.best_score : request.resource.data.best_acc)
         && ((request.resource.data.tries == resource.data.tries + 1 && request.resource.data.best == resource.data.best
               && request.resource.data.best_acc == resource.data.best_acc && request.resource.data.best_score == resource.data.best_score)
             || (request.resource.data.tries == resource.data.tries && request.resource.data.best >= resource.data.best));
@@ -1176,6 +1187,7 @@ service cloud.firestore {
         && request.resource.data.week_min <= 30 && request.resource.data.day_min <= 30;
       allow update: if request.resource.data.get('class_code', '') == code && practiceOk(docId, request.resource.data)
         && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
+        && request.resource.data.name.lower() == resource.data.name.lower() && request.time > resource.data.updated_at + duration.value(50, 's')   // SECURITY H3 (2026-11-17)
         && request.resource.data.total_min >= resource.data.total_min
         && request.resource.data.total_min <= resource.data.total_min + 30
         && periodOk(request.resource.data.week, request.resource.data.week_min, resource.data.week, resource.data.week_min)
@@ -1186,7 +1198,7 @@ service cloud.firestore {
     match /classes/{code}/genius_scores/{docId} {
       allow read: if true;
       allow create: if request.resource.data.get('class_code', '') == code && geniusOk(docId, request.resource.data);
-      allow update: if request.resource.data.get('class_code', '') == code && geniusOk(docId, request.resource.data)
+      allow update: if request.resource.data.get('class_code', '') == code && geniusOk(docId, request.resource.data) && request.resource.data.name.lower() == resource.data.name.lower()   // SECURITY H3
         && request.resource.data.sid == resource.data.sid && request.resource.data.class_code == resource.data.class_code
         && geniusBetter(request.resource.data, resource.data);
       allow delete: if isAdmin() || ownsClass(resource.data.get('class_code', ''));
