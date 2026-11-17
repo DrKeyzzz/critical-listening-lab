@@ -1261,7 +1261,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create, update: if ownsClass(code)
-        && request.resource.data.keys().hasOnly(['round', 'q', 'type', 'opts', 'skills', 'open', 'ends_at', 'spot', 'updated_at'])
+        && request.resource.data.keys().hasOnly(['round', 'q', 'type', 'opts', 'skills', 'open', 'ends_at', 'spot', 'ks', 'updated_at'])
         && request.resource.data.round is string && request.resource.data.round.matches('^[A-Za-z0-9-]{1,40}$')
         && request.resource.data.q is string && request.resource.data.q.size() <= 200
         && request.resource.data.type in ['text', 'mc', 'yn', 'num', 'emoji', 'word']
@@ -1270,6 +1270,8 @@ service cloud.firestore {
         && (!('skills' in request.resource.data) || (request.resource.data.skills is list && request.resource.data.skills.size() <= 20))
         && (!('ends_at' in request.resource.data) || request.resource.data.ends_at == null || request.resource.data.ends_at is timestamp)
         && (!('spot' in request.resource.data) || (request.resource.data.spot is list && request.resource.data.spot.size() <= 2))
+        // ks = a key signature drawn on a staff with the question (Key signature maker, 2026-11-17): -7..7, minus = flats
+        && (!('ks' in request.resource.data) || (request.resource.data.ks is int && request.resource.data.ks >= -7 && request.resource.data.ks <= 7))
         && request.resource.data.updated_at == request.time;
       allow delete: if isAdmin() || ownsClass(code);
 
