@@ -1049,6 +1049,28 @@ service cloud.firestore {
       allow create, update: if isAdmin() && (docId.matches('^none_[a-z]{2,16}$') || docId.matches('^w[0-9a-f]{8}_[a-z]{2,16}$'));
     }
 
+    // ONE TIME OWNER TRANSFER (2026-11-17): the admin may move a teacher's classes and records to another of their Google
+    // accounts (dashboard Admin tab, "Transfer classes"). Only the owner fields change; nothing else in the document.
+    function ownerOnly(f) {
+      return isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(f)
+        && request.resource.data[f[0]] is string && request.resource.data[f[0]].size() <= 100;
+    }
+    match /classes/{code} { allow update: if ownerOnly(['ownerEmail']); }
+    match /progress/{docId} { allow update: if ownerOnly(['owner']); }
+    match /scale_progress/{docId} { allow update: if ownerOnly(['owner']); }
+    match /tidal_progress/{docId} { allow update: if ownerOnly(['owner']); }
+    match /rooftop_progress/{docId} { allow update: if ownerOnly(['owner']); }
+    match /listening_progress/{docId} { allow update: if ownerOnly(['owner']); }
+    match /brainwaves_progress/{docId} { allow update: if ownerOnly(['owner']); }
+    match /game_feedback/{noteId} { allow update: if ownerOnly(['owner']); }
+    match /tests/{testId} { allow update: if ownerOnly(['owner']); }
+    match /test_results/{resultId} { allow update: if ownerOnly(['owner']); }
+    match /bc_answers/{id} { allow update: if ownerOnly(['owner']); }
+    match /bc_pulse/{key} { allow update: if ownerOnly(['owner']); }
+    match /bc_private/{id} { allow update: if ownerOnly(['owner']); }
+    match /bc_reports/{key} { allow update: if ownerOnly(['owner', 'teacher']); }
+    match /sm_threads/{id} { allow update: if ownerOnly(['owner', 'teacher']); }
+
     // ================= PRIVACY 2026-10-26: class locked copies =================
     // Every score (and practice time) is also written inside its class: classes/{code}/<collection>/{id}.
     // Reading needs the class code; there is NO collection group rule, so nobody can read across classes.
