@@ -1296,7 +1296,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create, update: if ownsClass(code)
-        && request.resource.data.keys().hasOnly(['round', 'q', 'type', 'opts', 'skills', 'open', 'ends_at', 'spot', 'ks', 'game', 'reveal', 'final', 'board', 'updated_at'])
+        && request.resource.data.keys().hasOnly(['round', 'q', 'type', 'opts', 'skills', 'open', 'ends_at', 'spot', 'ks', 'clef', 'game', 'reveal', 'final', 'board', 'updated_at'])
         && request.resource.data.round is string && request.resource.data.round.matches('^[A-Za-z0-9-]{1,40}$')
         && request.resource.data.q is string && request.resource.data.q.size() <= 200
         && request.resource.data.type in ['text', 'mc', 'yn', 'num', 'emoji', 'word']
@@ -1307,6 +1307,8 @@ service cloud.firestore {
         && (!('spot' in request.resource.data) || (request.resource.data.spot is list && request.resource.data.spot.size() <= 2))
         // ks = a key signature drawn on a staff with the question (Key signature maker, 2026-11-17): -7..7, minus = flats
         && (!('ks' in request.resource.data) || (request.resource.data.ks is int && request.resource.data.ks >= -7 && request.resource.data.ks <= 7))
+        // clef for that staff (2026-11-17): treble when missing
+        && (!('clef' in request.resource.data) || request.resource.data.clef in ['treble', 'bass', 'alto'])
         // Showdown (game mode, 2026-11-17): game on/off, the right choice shown only after time is up, the final Curtain call, the top-5 board (name, sid, points)
         && (!('game' in request.resource.data) || request.resource.data.game is bool)
         && (!('final' in request.resource.data) || request.resource.data.final is bool)
