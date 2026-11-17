@@ -3487,17 +3487,17 @@ draw();
   var me = document.currentScript, GAME = me && me.getAttribute('data-game');
   if (!GAME || window.MTGActivity) return;
   window.MTGActivity = true;
-  // The Support and Privacy links (Privacy 2026-11-04, Support 2026-11-06): next to the Feedback button when the page has one,
+  // The Privacy link (2026-11-04; the Support link was taken out 2026-11-17 until paid plans are set up): next to the Feedback button when the page has one,
   // else in a small footer of their own.
   function privacyLink(){
     if (document.querySelector('.mtg-privacy')) return;
     function link(href, text, cls, color){ var a = document.createElement('a'); a.href = href; a.className = cls; a.textContent = text;
       a.style.cssText = 'font-size:14px;color:' + color + ';text-decoration:underline;align-self:center'; return a; }
-    var sup = link('/support/', '☕ Support', 'mtg-support', '#ffc85c'), a = link('/privacy/', 'Privacy', 'mtg-privacy', 'var(--dim,var(--muted,#9aa7bb))');
+    var a = link('/privacy/', 'Privacy', 'mtg-privacy', 'var(--dim,var(--muted,#9aa7bb))');
     var foot = document.querySelector('.mtgfb-foot');
-    if (foot) { foot.style.gap = '18px'; foot.style.alignItems = 'center'; foot.style.flexWrap = 'wrap'; foot.appendChild(sup); foot.appendChild(a); return; }
+    if (foot) { foot.style.gap = '18px'; foot.style.alignItems = 'center'; foot.style.flexWrap = 'wrap'; foot.appendChild(a); return; }
     foot = document.createElement('div'); foot.style.cssText = 'display:flex;justify-content:center;gap:18px;padding:16px 12px 26px';
-    foot.appendChild(sup); foot.appendChild(a); document.body.appendChild(foot);
+    foot.appendChild(a); document.body.appendChild(foot);
   }
   if (document.readyState === 'complete') setTimeout(privacyLink, 500); else addEventListener('load', function(){ setTimeout(privacyLink, 500); });
   if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && !/[?&]activity=1\b/.test(location.search)) return;
