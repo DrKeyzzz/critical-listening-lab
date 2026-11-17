@@ -1344,8 +1344,15 @@ service cloud.firestore {
       allow delete: if bcMine(resource);
     }
     match /bc_pulse/{key} {
-      allow read, delete: if bcMine(resource);
-      allow create, update: if bcKeyOk(key)
+      // I'm lost (2026-11-17): the student's device reads its own doc by its secret key (to see when the teacher cleared it);
+      // a student can turn lost on but only the class's teacher (or the admin) can turn it off.
+      allow get: if true;
+      allow list, delete: if bcMine(resource);
+      allow update: if bcPulseOk(key) && (resource.data.lost == false || request.resource.data.lost == true || bcMine(resource));
+      allow create: if bcPulseOk(key);
+    }
+    function bcPulseOk(key) {
+      return bcKeyOk(key)
         && request.resource.data.keys().hasOnly(['class_code', 'owner', 'sid', 'name', 'lost', 'conf', 'at'])
         && request.resource.data.keys().hasAll(['class_code', 'owner', 'sid', 'name', 'lost', 'conf', 'at'])
         && bcClassOk(request.resource.data) && bcNameOk(request.resource.data)
