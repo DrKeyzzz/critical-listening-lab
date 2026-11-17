@@ -679,15 +679,26 @@ service cloud.firestore {
     // ================= Feedback =================
     // Any student or guest can send one short note from the Feedback button in a game. Nobody can edit it.
     // Only the admin, or the teacher who owns the sender's class, can read or delete it.
+    // FEEDBACK LIMIT (2026-11-17, David: "feedback limiting as well"): every note names its device's gate (a random 20-character id the
+    // browser keeps, not linked to the student) and writes fb_gate/<gate> = { at } in the same batch; a gate can be written again
+    // only 60 s later. Honest limit: a script can make new gate ids; App Check (security review M2) is the real fix for scripts.
+    match /fb_gate/{gate} {
+      allow get, list: if false;
+      allow create: if gate.matches('^[a-z0-9]{20}$') && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time;
+      allow update: if request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time
+        && request.time > resource.data.at + duration.value(60, 's');
+    }
     match /game_feedback/{noteId} {
       allow read: if isAdmin();   // only the admin reads feedback (David, 2026-11-16); teachers no longer see it
-      allow create: if feedbackOk(request.resource.data) && classCodesOk(request.resource.data);
+      allow create: if feedbackOk(request.resource.data) && classCodesOk(request.resource.data)
+        && request.resource.data.get('gate', '') is string && request.resource.data.get('gate', '').matches('^[a-z0-9]{20}$')
+        && getAfter(/databases/$(database)/documents/fb_gate/$(request.resource.data.gate)).data.at == request.time;
       allow update: if false;
       allow delete: if isAdmin();
     }
 
     function feedbackOk(d) {
-      return d.keys().hasOnly(['game', 'text', 'name', 'class_code', 'class_codes', 'owner', 'created_at', 'key', 'sid'])
+      return d.keys().hasOnly(['game', 'text', 'name', 'class_code', 'class_codes', 'owner', 'created_at', 'key', 'sid', 'gate'])
         && (!('key' in d) || (d.key is string && d.key.matches('^[a-z0-9]{20}$')))   // device key, so a reply can be private (2026-11-16)
         && (!('sid' in d) || (d.sid is string && d.sid.matches('^[a-z]{0,16}$')))
         && d.game in ['scale-quest', 'tidal-tones', 'earshot-saloon', 'rhythm-trainer', 'rooftop-runner', 'ear-brain', 'hub', 'critical-listening-lab']
@@ -899,7 +910,9 @@ service cloud.firestore {
               && request.resource.data.unread_teacher == 0 && request.resource.data.unread_admin <= 1));
       allow update: if threadOk(email, request.resource.data)
         && ((isAdmin() && threadSide(request.resource.data, resource.data, 'admin', 'unread_admin', 'unread_teacher'))
-          || (isThreadTeacher(email) && threadSide(request.resource.data, resource.data, 'teacher', 'unread_teacher', 'unread_admin')));
+          || (isThreadTeacher(email) && threadSide(request.resource.data, resource.data, 'teacher', 'unread_teacher', 'unread_admin')
+            // LIMIT (2026-11-17): a teacher's messages at least 5 s apart (reading, which leaves last_at alone, is never limited)
+            && (request.resource.data.last_at == resource.data.last_at || request.time > resource.data.last_at + duration.value(5, 's'))));
       allow delete: if isAdmin();
 
       match /messages/{msgId} {
