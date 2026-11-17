@@ -1390,6 +1390,8 @@ service cloud.firestore {
           && request.resource.data.last_from == 'student' && request.resource.data.last_at == request.time
           && smTextOk(request.resource.data.last_text, 120)
           && request.resource.data.unread_teacher == resource.data.unread_teacher + 1 && request.resource.data.unread_student == 0
+          // LIMIT (2026-11-17, a student sent 58 in a row): at most 3 messages until the teacher replies, at least 30 s apart
+          && request.resource.data.unread_teacher <= 3 && request.time > resource.data.last_at + duration.value(30, 's')
           && smOpen(resource.data.class_code, resource.data.sid))
         // the student's device read the teacher's replies
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unread_student']) && request.resource.data.unread_student == 0)
@@ -1430,7 +1432,8 @@ service cloud.firestore {
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_at', 'last_from', 'last_text', 'unread_admin', 'unread_student'])
           && request.resource.data.last_from == 'student' && request.resource.data.last_at == request.time
           && smTextOk(request.resource.data.last_text, 120)
-          && request.resource.data.unread_admin == resource.data.unread_admin + 1 && request.resource.data.unread_student == 0)
+          && request.resource.data.unread_admin == resource.data.unread_admin + 1 && request.resource.data.unread_student == 0
+          && request.resource.data.unread_admin <= 3 && request.time > resource.data.last_at + duration.value(30, 's'))   // LIMIT (2026-11-17)
         // the student read the replies
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unread_student']) && request.resource.data.unread_student == 0);
       allow delete: if isAdmin();
