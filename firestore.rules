@@ -1361,15 +1361,20 @@ service cloud.firestore {
         && request.resource.data.at == request.time;
     }
     match /bc_private/{id} {
-      allow read, delete: if bcMine(resource);
+      // Replies (2026-11-17): a question whose id starts with the device's secret key (<key>_<random>) can be read by that id,
+      // so only that student's device sees the teacher's reply. Older questions (random ids) stay teacher-only.
+      allow get: if bcMine(resource) || id.matches('^' + resource.data.key + '_[a-z0-9]{6,20}$');
+      allow list, delete: if bcMine(resource);
       allow create: if request.resource.data.keys().hasOnly(['class_code', 'owner', 'sid', 'name', 'key', 'text', 'at'])
         && request.resource.data.keys().hasAll(['class_code', 'owner', 'sid', 'name', 'key', 'text', 'at'])
         && bcClassOk(request.resource.data) && bcNameOk(request.resource.data) && bcKeyOk(request.resource.data.key)
         && request.resource.data.text is string && request.resource.data.text.size() >= 1 && request.resource.data.text.size() <= 280
         && request.resource.data.at == request.time;
       allow update: if bcMine(resource)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done'])
-        && request.resource.data.done is bool;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'reply', 'reply_at'])
+        && request.resource.data.done is bool
+        && (!('reply' in request.resource.data) || (request.resource.data.reply is string && request.resource.data.reply.size() >= 1 && request.resource.data.reply.size() <= 280))
+        && (!('reply_at' in request.resource.data) || request.resource.data.reply_at == request.time || request.resource.data.reply_at == resource.data.get('reply_at', null));
     }
     match /bc_reports/{key} {
       allow get: if true;   // only the student's device knows the key
