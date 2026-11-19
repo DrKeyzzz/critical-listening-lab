@@ -3089,7 +3089,7 @@ function histNote(label, ok) {
   if (!h || !h.days) h = { v: 1, days: {} };
   h.name = h.name || displayName(P);
   const d = h.days[today()] ||= {}, g = d.listen ||= { plays: 0, answers: 0, correct: 0, ms: 0, best: 0, level: 0, skills: {}, last: 0 };
-  if (g.last && now - g.last < 600000) g.ms += now - g.last;   // gaps over 10 minutes aren't practice time
+  if (g.last && now - g.last < 120000) g.ms += now - g.last;   // gaps over 2 minutes aren't practice time (was 10 until 2026-11-18)
   g.last = now; g.answers++; if (ok) g.correct++;
   const sk = g.skills[label] ||= [0, 0]; sk[1]++; if (ok) sk[0]++;
   try { localStorage.setItem(k, JSON.stringify(h)); } catch (e) {}
